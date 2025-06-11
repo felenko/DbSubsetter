@@ -1,0 +1,173 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\kfelenko\\source\\repos\\DbSubsetter\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{8965CF0A-C2DF-4DC4-ADF4-4845D7D6F1F3}|DbSubsetter.csproj|c:\\users\\kfelenko\\source\\repos\\dbsubsetter\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{8965CF0A-C2DF-4DC4-ADF4-4845D7D6F1F3}|DbSubsetter.csproj|solutionrelative:program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\b199b3c43424bede56a6db25e6a6a2ee9da238071e0e153a8e677cfef9d4fc15\\src\\libraries\\System.Private.CoreLib\\src\\System\\Runtime\\ExceptionServices\\ExceptionDispatchInfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\3868ce4dbc83cd8f53469eead9414ea60997f545f54fd0aa97585b4dbdad6434\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\FutureFactory.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8965CF0A-C2DF-4DC4-ADF4-4845D7D6F1F3}|DbSubsetter.csproj|c:\\users\\kfelenko\\source\\repos\\dbsubsetter\\dbsubsetter.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{8965CF0A-C2DF-4DC4-ADF4-4845D7D6F1F3}|DbSubsetter.csproj|solutionrelative:dbsubsetter.csproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 1,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedHeight": 315,
+          "SelectedChildIndex": 22,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:134:0:{75188d03-9892-4ae2-abf1-207126247ce5}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:150:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c64b9c2-e352-428e-a56d-0ace190b99a6}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{e8b06f52-6d01-11d2-aa7d-00c04f990343}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:2:0:{e8b06f52-6d01-11d2-aa7d-00c04f990343}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:147:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:144:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:145:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:146:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:147:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:148:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:146:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:149:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:151:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:150:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:153:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{5726b0e3-1012-5233-81f9-d1fad48e7a56}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{d78612c7-9962-4b83-95d9-268046dad23a}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ExceptionDispatchInfo.cs",
+              "DocumentMoniker": "C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\b199b3c43424bede56a6db25e6a6a2ee9da238071e0e153a8e677cfef9d4fc15\\src\\libraries\\System.Private.CoreLib\\src\\System\\Runtime\\ExceptionServices\\ExceptionDispatchInfo.cs",
+              "RelativeDocumentMoniker": "..\\..\\..\\AppData\\Local\\SourceServer\\b199b3c43424bede56a6db25e6a6a2ee9da238071e0e153a8e677cfef9d4fc15\\src\\libraries\\System.Private.CoreLib\\src\\System\\Runtime\\ExceptionServices\\ExceptionDispatchInfo.cs",
+              "ToolTip": "C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\b199b3c43424bede56a6db25e6a6a2ee9da238071e0e153a8e677cfef9d4fc15\\src\\libraries\\System.Private.CoreLib\\src\\System\\Runtime\\ExceptionServices\\ExceptionDispatchInfo.cs [Read Only]",
+              "RelativeToolTip": "..\\..\\..\\AppData\\Local\\SourceServer\\b199b3c43424bede56a6db25e6a6a2ee9da238071e0e153a8e677cfef9d4fc15\\src\\libraries\\System.Private.CoreLib\\src\\System\\Runtime\\ExceptionServices\\ExceptionDispatchInfo.cs [Read Only]",
+              "ViewState": "AgIAAEIAAAAAAAAAAAAAADQAAAAMAAAAAQAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-10T17:13:13.857Z",
+              "EditorCaption": " [Read Only]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "FutureFactory.cs",
+              "DocumentMoniker": "C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\3868ce4dbc83cd8f53469eead9414ea60997f545f54fd0aa97585b4dbdad6434\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\FutureFactory.cs",
+              "RelativeDocumentMoniker": "..\\..\\..\\AppData\\Local\\SourceServer\\3868ce4dbc83cd8f53469eead9414ea60997f545f54fd0aa97585b4dbdad6434\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\FutureFactory.cs",
+              "ToolTip": "C:\\Users\\kfelenko\\AppData\\Local\\SourceServer\\3868ce4dbc83cd8f53469eead9414ea60997f545f54fd0aa97585b4dbdad6434\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\FutureFactory.cs",
+              "RelativeToolTip": "..\\..\\..\\AppData\\Local\\SourceServer\\3868ce4dbc83cd8f53469eead9414ea60997f545f54fd0aa97585b4dbdad6434\\src\\libraries\\System.Private.CoreLib\\src\\System\\Threading\\Tasks\\FutureFactory.cs",
+              "ViewState": "AgIAAO4BAAAAAAAAAAAWwPoBAAAUAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-10T15:12:53.928Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "DbSubsetter",
+              "DocumentMoniker": "C:\\Users\\kfelenko\\source\\repos\\DbSubsetter\\DbSubsetter.csproj",
+              "RelativeDocumentMoniker": "DbSubsetter.csproj",
+              "ToolTip": "C:\\Users\\kfelenko\\source\\repos\\DbSubsetter\\DbSubsetter.csproj",
+              "RelativeToolTip": "DbSubsetter.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-06-10T13:47:18.407Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\Users\\kfelenko\\source\\repos\\DbSubsetter\\Program.cs",
+              "RelativeDocumentMoniker": "Program.cs",
+              "ToolTip": "C:\\Users\\kfelenko\\source\\repos\\DbSubsetter\\Program.cs",
+              "RelativeToolTip": "Program.cs",
+              "ViewState": "AgIAAHIAAAAAAAAAAAAwwJYAAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-06-10T13:36:42.343Z",
+              "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedHeight": 85,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
