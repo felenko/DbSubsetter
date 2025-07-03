@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DbSubsetter": {
+      "commandName": "Project",
+      "commandLineArgs": "\"Data Source=li-sql2;Initial Catalog=STAGING_BDBPayrollWPF;Integrated Security=True;Encrypt=True;Trust Server Certificate=True\" \"[dbo].[Divisions]\" \"14870\" \"subset.sql\""
+    }
+  }
+}
