@@ -12,6 +12,7 @@ public class SubsetEngine
     private readonly string _outFile;
     private readonly int _maxRowsPerTable;
     private readonly IProgress<SubsetProgress>? _progress;
+    private readonly HashSet<string> _excludedTables;
 
     private Queue<string> _queue = new();
     private HashSet<string> _processedTables = new();
@@ -24,7 +25,8 @@ public class SubsetEngine
     public long TotalOut { get; private set; }
 
     public SubsetEngine(string connStr, string rootTable, string rootPkVal, string outFile,
-        int maxRowsPerTable = 1000, IProgress<SubsetProgress>? progress = null)
+        int maxRowsPerTable = 1000, IProgress<SubsetProgress>? progress = null,
+        IReadOnlyCollection<string>? excludedTables = null)
     {
         _connStr = connStr;
         _rootTable = rootTable;
@@ -32,6 +34,9 @@ public class SubsetEngine
         _outFile = outFile;
         _maxRowsPerTable = maxRowsPerTable;
         _progress = progress;
+        _excludedTables = excludedTables is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(excludedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
     }
 
     private void Report(string message, string currentTable = "")
@@ -170,6 +175,11 @@ public class SubsetEngine
             ct.ThrowIfCancellationRequested();
 
             string childCan = Canon(fk.ChildTable);
+
+            // Skip excluded tables
+            if (_excludedTables.Contains(childCan))
+                continue;
+
             if (!_pkSets.TryGetValue(childCan, out var childSet))
             {
                 childSet = new HashSet<string>();
@@ -221,6 +231,112 @@ public class SubsetEngine
         Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
     }
 
+    /// <summary>
+    /// Returns all user tables as [schema].[table] names.
+    /// </summary>
+    async Task<List<string>> GetAllTablesAsync(SqlConnection cn, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT QUOTENAME(s.name) + '.' + QUOTENAME(t.name)
+            FROM sys.tables t
+            JOIN sys.schemas s ON s.schema_id = t.schema_id
+            ORDER BY s.name, t.name;
+            """;
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        var tables = new List<string>();
+        while (await rdr.ReadAsync(ct))
+            tables.Add(rdr.GetString(0));
+        return tables;
+    }
+
+    /// <summary>
+    /// BFS through sys.foreign_keys starting from rootTable to find all tables reachable via FK chain.
+    /// Returns canonical (lowered, unbracketed) table names.
+    /// </summary>
+    async Task<HashSet<string>> GetReachableTablesAsync(SqlConnection cn, CancellationToken ct)
+    {
+        // Build full FK adjacency: parent -> children (both directions to cover referenced and referencing)
+        const string sql = """
+            SELECT
+                parentTab = QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + '.' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id)),
+                childTab  = QUOTENAME(OBJECT_SCHEMA_NAME(fk.parent_object_id))     + '.' + QUOTENAME(OBJECT_NAME(fk.parent_object_id))
+            FROM sys.foreign_keys fk;
+            """;
+
+        var adj = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        while (await rdr.ReadAsync(ct))
+        {
+            string parent = Canon(rdr.GetString(0));
+            string child = Canon(rdr.GetString(1));
+
+            if (!adj.TryGetValue(parent, out var pSet))
+                adj[parent] = pSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            pSet.Add(child);
+
+            if (!adj.TryGetValue(child, out var cSet))
+                adj[child] = cSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            cSet.Add(parent);
+        }
+
+        // BFS from root
+        var rootCan = Canon(_rootTable);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootCan };
+        var bfsQueue = new Queue<string>();
+        bfsQueue.Enqueue(rootCan);
+
+        while (bfsQueue.Count > 0)
+        {
+            var current = bfsQueue.Dequeue();
+            if (adj.TryGetValue(current, out var neighbors))
+            {
+                foreach (var neighbor in neighbors)
+                {
+                    if (visited.Add(neighbor))
+                        bfsQueue.Enqueue(neighbor);
+                }
+            }
+        }
+
+        return visited;
+    }
+
+    /// <summary>
+    /// Dumps all rows (up to maxRowsPerTable) from a table with no FK filter.
+    /// </summary>
+    async Task DumpFullTable(string table, SqlConnection cn, StreamWriter writer, CancellationToken ct)
+    {
+        Report($"▶ {table} (unrelated) ... exporting up to {_maxRowsPerTable:N0} rows", table);
+
+        string sql = $"SELECT TOP ({_maxRowsPerTable}) * FROM {table};";
+
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+
+        var cols = Enumerable.Range(0, rdr.FieldCount)
+            .Select(i => Esc(rdr.GetName(i))).ToArray();
+
+        while (await rdr.ReadAsync(ct))
+        {
+            var vals = new string[rdr.FieldCount];
+            for (int i = 0; i < rdr.FieldCount; i++)
+                vals[i] = Lit(rdr.GetValue(i));
+
+            await writer.WriteLineAsync(
+                $"INSERT INTO {table} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)});");
+
+            TotalOut++;
+            if (TotalOut % 250 == 0)
+                Report($"   ... {TotalOut:N0} rows written", table);
+        }
+
+        _tablesProcessed++;
+        Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
+    }
+
     public async Task RunAsync(CancellationToken ct = default)
     {
         await using var cn = new SqlConnection(_connStr);
@@ -229,6 +345,7 @@ public class SubsetEngine
 
         Report($"▶ Starting subset → {_outFile}");
 
+        // === Pass 1: BFS from root row following FK relationships ===
         _rootPkCol = await GetPkColAsync(cn, _rootTable, ct);
         _pkSets[Canon(_rootTable)] = new HashSet<string> { _rootPkVal };
 
@@ -243,6 +360,9 @@ public class SubsetEngine
             string table = _queue.Dequeue();
             string can = Canon(table);
 
+            if (_excludedTables.Contains(can))
+                continue;
+
             if (!_pkSets.TryGetValue(can, out var pkSet) || pkSet.Count == 0)
                 continue;
 
@@ -253,6 +373,33 @@ public class SubsetEngine
             pkSet.Clear();
 
             await ProcessTable(table, pkList, can, cn, writer, ct);
+        }
+
+        // === Pass 2: Dump unrelated tables (no FK path from root) ===
+        Report("▶ Pass 2: exporting unrelated tables...");
+
+        var allTables = await GetAllTablesAsync(cn, ct);
+        var reachableTables = await GetReachableTablesAsync(cn, ct);
+
+        // Collect canonical names of tables already processed in Pass 1
+        var alreadyProcessed = new HashSet<string>(
+            _processedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var table in allTables)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var can = Canon(table);
+
+            // Skip if reachable via FK, already processed, or excluded
+            if (reachableTables.Contains(can))
+                continue;
+            if (alreadyProcessed.Contains(can))
+                continue;
+            if (_excludedTables.Contains(can))
+                continue;
+
+            await DumpFullTable(table, cn, writer, ct);
         }
 
         Report($"✓ Complete. {TotalOut:N0} INSERTs written to {_outFile}");

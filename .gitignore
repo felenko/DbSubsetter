@@ -1,0 +1,7 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/DbSubsetter.Core/bin/Debug/net8.0
+/DbSubsetter.Core/obj
+/.vs/DbSubsetter/CopilotIndices/17.14.734.62261

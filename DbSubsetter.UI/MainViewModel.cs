@@ -35,6 +35,8 @@ public class MainViewModel : INotifyPropertyChanged
         SaveProfileCommand = new RelayCommand(SaveProfile, () => !string.IsNullOrWhiteSpace(Server));
         DeleteProfileCommand = new RelayCommand(DeleteProfile, () => SelectedProfile is not null);
         RefreshTablesCommand = new AsyncRelayCommand(RefreshTablesAsync, () => !IsRunning && ConnectionOk);
+        SelectAllTablesCommand = new RelayCommand(SelectAllTables);
+        DeselectAllTablesCommand = new RelayCommand(DeselectAllTables);
 
         Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
         MaxRowsPerTable = 1000;
@@ -118,6 +120,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     // Configuration
     public ObservableCollection<string> Tables { get; } = new();
+    public ObservableCollection<TableSelection> TableSelections { get; } = new();
 
     private string? _selectedTable;
     public string? SelectedTable
@@ -215,6 +218,8 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand SaveProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
     public ICommand RefreshTablesCommand { get; }
+    public ICommand SelectAllTablesCommand { get; }
+    public ICommand DeselectAllTablesCommand { get; }
 
     private string BuildConnectionString()
     {
@@ -253,14 +258,30 @@ public class MainViewModel : INotifyPropertyChanged
         {
             var tables = await _explorer.GetTablesAsync(BuildConnectionString());
             Tables.Clear();
+            TableSelections.Clear();
             foreach (var t in tables)
+            {
                 Tables.Add(t);
+                TableSelections.Add(new TableSelection { Name = t, IsIncluded = true });
+            }
             AddLog($"Loaded {tables.Count} tables");
         }
         catch (Exception ex)
         {
             AddLog($"Error loading tables: {ex.Message}");
         }
+    }
+
+    private void SelectAllTables()
+    {
+        foreach (var ts in TableSelections)
+            ts.IsIncluded = true;
+    }
+
+    private void DeselectAllTables()
+    {
+        foreach (var ts in TableSelections)
+            ts.IsIncluded = false;
     }
 
     private async Task LoadPrimaryKeyAsync(string table)
@@ -321,13 +342,19 @@ public class MainViewModel : INotifyPropertyChanged
 
         try
         {
+            var excludedTables = TableSelections
+                .Where(ts => !ts.IsIncluded)
+                .Select(ts => ts.Name)
+                .ToList();
+
             var engine = new SubsetEngine(
                 BuildConnectionString(),
                 SelectedTable!,
                 RootPkValue,
                 OutputFile,
                 MaxRowsPerTable,
-                progress);
+                progress,
+                excludedTables);
 
             await Task.Run(() => engine.RunAsync(_cts.Token));
 
