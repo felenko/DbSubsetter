@@ -1,0 +1,405 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
+using DbSubsetter.Core;
+using Microsoft.Win32;
+
+namespace DbSubsetter.UI;
+
+public class MainViewModel : INotifyPropertyChanged
+{
+    private readonly SchemaExplorer _explorer = new();
+    private readonly ProfileManager _profileManager = new();
+    private readonly DispatcherTimer _elapsedTimer;
+    private CancellationTokenSource? _cts;
+    private Stopwatch? _stopwatch;
+
+    public MainViewModel()
+    {
+        _elapsedTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _elapsedTimer.Tick += (_, _) =>
+        {
+            if (_stopwatch is not null)
+                ElapsedTime = _stopwatch.Elapsed.ToString(@"mm\:ss");
+        };
+
+        TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsRunning);
+        BrowseOutputCommand = new RelayCommand(BrowseOutput);
+        RunSubsetCommand = new AsyncRelayCommand(RunSubsetAsync, CanRunSubset);
+        CancelCommand = new RelayCommand(CancelRun, () => IsRunning);
+        SaveProfileCommand = new RelayCommand(SaveProfile, () => !string.IsNullOrWhiteSpace(Server));
+        DeleteProfileCommand = new RelayCommand(DeleteProfile, () => SelectedProfile is not null);
+        RefreshTablesCommand = new AsyncRelayCommand(RefreshTablesAsync, () => !IsRunning && ConnectionOk);
+
+        Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
+        MaxRowsPerTable = 1000;
+        IntegratedSecurity = true;
+        OutputFile = "subset.sql";
+    }
+
+    // Connection
+    private string _server = string.Empty;
+    public string Server
+    {
+        get => _server;
+        set { _server = value; OnPropertyChanged(); OnPropertyChanged(nameof(ConnectionOk)); }
+    }
+
+    private string _database = string.Empty;
+    public string Database
+    {
+        get => _database;
+        set { _database = value; OnPropertyChanged(); OnPropertyChanged(nameof(ConnectionOk)); }
+    }
+
+    private bool _integratedSecurity = true;
+    public bool IntegratedSecurity
+    {
+        get => _integratedSecurity;
+        set { _integratedSecurity = value; OnPropertyChanged(); OnPropertyChanged(nameof(SqlAuthEnabled)); }
+    }
+
+    public bool SqlAuthEnabled => !IntegratedSecurity;
+
+    private string _username = string.Empty;
+    public string Username
+    {
+        get => _username;
+        set { _username = value; OnPropertyChanged(); }
+    }
+
+    private string _password = string.Empty;
+    public string Password
+    {
+        get => _password;
+        set { _password = value; OnPropertyChanged(); }
+    }
+
+    private string _connectionStatus = string.Empty;
+    public string ConnectionStatus
+    {
+        get => _connectionStatus;
+        set { _connectionStatus = value; OnPropertyChanged(); }
+    }
+
+    private bool _connectionOk;
+    public bool ConnectionOk
+    {
+        get => _connectionOk;
+        set { _connectionOk = value; OnPropertyChanged(); }
+    }
+
+    // Profiles
+    public ObservableCollection<ConnectionProfile> Profiles { get; }
+
+    private ConnectionProfile? _selectedProfile;
+    public ConnectionProfile? SelectedProfile
+    {
+        get => _selectedProfile;
+        set
+        {
+            _selectedProfile = value;
+            OnPropertyChanged();
+            if (value is not null)
+            {
+                Server = value.Server;
+                Database = value.Database;
+                IntegratedSecurity = value.IntegratedSecurity;
+                Username = value.Username;
+                Password = value.Password;
+            }
+        }
+    }
+
+    // Configuration
+    public ObservableCollection<string> Tables { get; } = new();
+
+    private string? _selectedTable;
+    public string? SelectedTable
+    {
+        get => _selectedTable;
+        set
+        {
+            _selectedTable = value;
+            OnPropertyChanged();
+            if (value is not null)
+                _ = LoadPrimaryKeyAsync(value);
+        }
+    }
+
+    private string _primaryKeyColumn = string.Empty;
+    public string PrimaryKeyColumn
+    {
+        get => _primaryKeyColumn;
+        set { _primaryKeyColumn = value; OnPropertyChanged(); }
+    }
+
+    private string _rootPkValue = string.Empty;
+    public string RootPkValue
+    {
+        get => _rootPkValue;
+        set { _rootPkValue = value; OnPropertyChanged(); }
+    }
+
+    private string _outputFile = "subset.sql";
+    public string OutputFile
+    {
+        get => _outputFile;
+        set { _outputFile = value; OnPropertyChanged(); }
+    }
+
+    private int _maxRowsPerTable = 1000;
+    public int MaxRowsPerTable
+    {
+        get => _maxRowsPerTable;
+        set { _maxRowsPerTable = Math.Max(1, value); OnPropertyChanged(); }
+    }
+
+    // Execution state
+    private bool _isRunning;
+    public bool IsRunning
+    {
+        get => _isRunning;
+        set { _isRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsNotRunning)); }
+    }
+
+    public bool IsNotRunning => !IsRunning;
+
+    private double _progressValue;
+    public double ProgressValue
+    {
+        get => _progressValue;
+        set { _progressValue = value; OnPropertyChanged(); }
+    }
+
+    private bool _isProgressIndeterminate;
+    public bool IsProgressIndeterminate
+    {
+        get => _isProgressIndeterminate;
+        set { _isProgressIndeterminate = value; OnPropertyChanged(); }
+    }
+
+    private string _currentTable = string.Empty;
+    public string CurrentTable
+    {
+        get => _currentTable;
+        set { _currentTable = value; OnPropertyChanged(); }
+    }
+
+    private string _elapsedTime = "00:00";
+    public string ElapsedTime
+    {
+        get => _elapsedTime;
+        set { _elapsedTime = value; OnPropertyChanged(); }
+    }
+
+    private long _totalInserts;
+    public long TotalInserts
+    {
+        get => _totalInserts;
+        set { _totalInserts = value; OnPropertyChanged(); }
+    }
+
+    public ObservableCollection<string> LogEntries { get; } = new();
+
+    // Commands
+    public ICommand TestConnectionCommand { get; }
+    public ICommand BrowseOutputCommand { get; }
+    public ICommand RunSubsetCommand { get; }
+    public ICommand CancelCommand { get; }
+    public ICommand SaveProfileCommand { get; }
+    public ICommand DeleteProfileCommand { get; }
+    public ICommand RefreshTablesCommand { get; }
+
+    private string BuildConnectionString()
+    {
+        var profile = new ConnectionProfile
+        {
+            Server = Server,
+            Database = Database,
+            IntegratedSecurity = IntegratedSecurity,
+            Username = Username,
+            Password = Password
+        };
+        return profile.ToConnectionString();
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        ConnectionStatus = "Testing...";
+        ConnectionOk = false;
+        try
+        {
+            await _explorer.TestConnectionAsync(BuildConnectionString());
+            ConnectionStatus = "Connected";
+            ConnectionOk = true;
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex)
+        {
+            ConnectionStatus = $"Failed: {ex.Message}";
+            ConnectionOk = false;
+        }
+    }
+
+    private async Task RefreshTablesAsync()
+    {
+        try
+        {
+            var tables = await _explorer.GetTablesAsync(BuildConnectionString());
+            Tables.Clear();
+            foreach (var t in tables)
+                Tables.Add(t);
+            AddLog($"Loaded {tables.Count} tables");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Error loading tables: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPrimaryKeyAsync(string table)
+    {
+        try
+        {
+            var pk = await _explorer.GetPrimaryKeyColumnAsync(BuildConnectionString(), table);
+            PrimaryKeyColumn = pk ?? "(no PK found)";
+        }
+        catch (Exception ex)
+        {
+            PrimaryKeyColumn = $"Error: {ex.Message}";
+        }
+    }
+
+    private void BrowseOutput()
+    {
+        var dlg = new SaveFileDialog
+        {
+            Filter = "SQL Files (*.sql)|*.sql|All Files (*.*)|*.*",
+            DefaultExt = ".sql",
+            FileName = Path.GetFileName(OutputFile)
+        };
+        if (dlg.ShowDialog() == true)
+            OutputFile = dlg.FileName;
+    }
+
+    private bool CanRunSubset() =>
+        !IsRunning &&
+        ConnectionOk &&
+        !string.IsNullOrWhiteSpace(SelectedTable) &&
+        !string.IsNullOrWhiteSpace(RootPkValue) &&
+        !string.IsNullOrWhiteSpace(OutputFile);
+
+    private async Task RunSubsetAsync()
+    {
+        IsRunning = true;
+        IsProgressIndeterminate = true;
+        LogEntries.Clear();
+        TotalInserts = 0;
+        _cts = new CancellationTokenSource();
+        _stopwatch = Stopwatch.StartNew();
+        _elapsedTimer.Start();
+
+        AddLog("Starting subset operation...");
+
+        var progress = new Progress<SubsetProgress>(p =>
+        {
+            AddLog(p.Message);
+            CurrentTable = p.CurrentTable;
+            TotalInserts = p.TotalRows;
+            if (p.TablesProcessed + p.TablesQueued > 0)
+            {
+                IsProgressIndeterminate = false;
+                ProgressValue = (double)p.TablesProcessed / (p.TablesProcessed + p.TablesQueued) * 100;
+            }
+        });
+
+        try
+        {
+            var engine = new SubsetEngine(
+                BuildConnectionString(),
+                SelectedTable!,
+                RootPkValue,
+                OutputFile,
+                MaxRowsPerTable,
+                progress);
+
+            await Task.Run(() => engine.RunAsync(_cts.Token));
+
+            TotalInserts = engine.TotalOut;
+            AddLog($"Complete! {engine.TotalOut:N0} INSERTs written to {OutputFile}");
+        }
+        catch (OperationCanceledException)
+        {
+            AddLog("Operation cancelled by user.");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Error: {ex.Message}");
+        }
+        finally
+        {
+            _stopwatch?.Stop();
+            _elapsedTimer.Stop();
+            ElapsedTime = _stopwatch?.Elapsed.ToString(@"mm\:ss") ?? "00:00";
+            IsRunning = false;
+            IsProgressIndeterminate = false;
+            _cts?.Dispose();
+            _cts = null;
+        }
+    }
+
+    private void CancelRun()
+    {
+        _cts?.Cancel();
+        AddLog("Cancellation requested...");
+    }
+
+    private void SaveProfile()
+    {
+        var name = Server + "/" + Database;
+        var existing = Profiles.FirstOrDefault(p => p.Name == name);
+        var profile = new ConnectionProfile
+        {
+            Name = name,
+            Server = Server,
+            Database = Database,
+            IntegratedSecurity = IntegratedSecurity,
+            Username = Username,
+            Password = Password
+        };
+
+        if (existing is not null)
+            Profiles.Remove(existing);
+
+        Profiles.Add(profile);
+        _profileManager.Save(Profiles.ToList());
+        SelectedProfile = profile;
+        AddLog($"Profile '{name}' saved");
+    }
+
+    private void DeleteProfile()
+    {
+        if (SelectedProfile is null) return;
+        var name = SelectedProfile.Name;
+        Profiles.Remove(SelectedProfile);
+        _profileManager.Save(Profiles.ToList());
+        SelectedProfile = null;
+        AddLog($"Profile '{name}' deleted");
+    }
+
+    private void AddLog(string message)
+    {
+        var entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        LogEntries.Add(entry);
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
