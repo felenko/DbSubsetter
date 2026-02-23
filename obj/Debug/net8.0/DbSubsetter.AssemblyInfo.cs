@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DbSubsetter")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0c32476956b90aec9f994926d4ba827d091f74ac")]
 [assembly: System.Reflection.AssemblyProductAttribute("DbSubsetter")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DbSubsetter")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
