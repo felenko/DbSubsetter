@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Text;
 
 namespace DbSubsetter.Core;
@@ -9,10 +10,13 @@ public class SubsetEngine
     private readonly string _connStr;
     private readonly string _rootTable;
     private readonly string _rootPkVal;
-    private readonly string _outFile;
+    private readonly string? _destConnStr;
+    private readonly string? _outFile;
     private readonly int _maxRowsPerTable;
     private readonly IProgress<SubsetProgress>? _progress;
     private readonly HashSet<string> _excludedTables;
+    private readonly SchemaScripter _scripter = new();
+    private readonly List<string> _fkScripts = new();
 
     private Queue<string> _queue = new();
     private HashSet<string> _processedTables = new();
@@ -24,13 +28,17 @@ public class SubsetEngine
 
     public long TotalOut { get; private set; }
 
-    public SubsetEngine(string connStr, string rootTable, string rootPkVal, string outFile,
+    public SubsetEngine(string connStr, string rootTable, string rootPkVal,
+        string? destConnStr = null, string? outFile = null,
         int maxRowsPerTable = 1000, IProgress<SubsetProgress>? progress = null,
         IReadOnlyCollection<string>? excludedTables = null)
     {
+        if (destConnStr is null && outFile is null)
+            throw new ArgumentException("Either destConnStr or outFile must be provided.");
         _connStr = connStr;
         _rootTable = rootTable;
         _rootPkVal = rootPkVal;
+        _destConnStr = destConnStr;
         _outFile = outFile;
         _maxRowsPerTable = maxRowsPerTable;
         _progress = progress;
@@ -129,43 +137,6 @@ public class SubsetEngine
             yield return bucket;
     }
 
-    async Task DumpRows(List<string> pkList, string pkCol, string table, string canon,
-        SqlConnection cn, StreamWriter writer, CancellationToken ct)
-    {
-        foreach (var batch in Batch(pkList, 1000))
-        {
-            ct.ThrowIfCancellationRequested();
-
-            string where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
-            string sql = $"SELECT TOP ({_maxRowsPerTable})* FROM {table} WHERE {where} ORDER BY {Esc(pkCol)} DESC;";
-
-            await using var cmd = new SqlCommand(sql, cn);
-            await using var rdr = await cmd.ExecuteReaderAsync(ct);
-
-            var cols = Enumerable.Range(0, rdr.FieldCount)
-                .Select(i => Esc(rdr.GetName(i))).ToArray();
-
-            while (await rdr.ReadAsync(ct))
-            {
-                string pkVal = rdr.GetValue(rdr.GetOrdinal(pkCol)).ToString()!;
-                string rowKey = $"{canon}|{pkVal}";
-                if (!_visitedRows.TryAdd(rowKey, 0))
-                    continue;
-
-                var vals = new string[rdr.FieldCount];
-                for (int i = 0; i < rdr.FieldCount; i++)
-                    vals[i] = Lit(rdr.GetValue(i));
-
-                await writer.WriteLineAsync(
-                    $"INSERT INTO {table} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)});");
-
-                TotalOut++;
-                if (TotalOut % 250 == 0)
-                    Report($"   ... {TotalOut:N0} rows written", table);
-            }
-        }
-    }
-
     async Task HarvestChildKeys(string parentTable, List<string> parentPkList,
         SqlConnection cn, CancellationToken ct)
     {
@@ -176,7 +147,6 @@ public class SubsetEngine
 
             string childCan = Canon(fk.ChildTable);
 
-            // Skip excluded tables
             if (_excludedTables.Contains(childCan))
                 continue;
 
@@ -217,23 +187,128 @@ public class SubsetEngine
         }
     }
 
-    async Task ProcessTable(string table, List<string> pkList, string canon,
+    // ── File-mode helpers ────────────────────────────────────────────────────
+
+    async Task DumpRows(List<string> pkList, string pkCol, string table, string canon,
         SqlConnection cn, StreamWriter writer, CancellationToken ct)
+    {
+        foreach (var batch in Batch(pkList, 1000))
+        {
+            ct.ThrowIfCancellationRequested();
+            string where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+            string sql = $"SELECT * FROM {table} WHERE {where} ORDER BY {Esc(pkCol)} DESC;";
+            await using var cmd = new SqlCommand(sql, cn);
+            await using var rdr = await cmd.ExecuteReaderAsync(ct);
+            var cols = Enumerable.Range(0, rdr.FieldCount).Select(i => Esc(rdr.GetName(i))).ToArray();
+            while (await rdr.ReadAsync(ct))
+            {
+                string pkVal = rdr.GetValue(rdr.GetOrdinal(pkCol)).ToString()!;
+                if (!_visitedRows.TryAdd($"{canon}|{pkVal}", 0)) continue;
+                var vals = new string[rdr.FieldCount];
+                for (int i = 0; i < rdr.FieldCount; i++) vals[i] = Lit(rdr.GetValue(i));
+                await writer.WriteLineAsync(
+                    $"INSERT INTO {table} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)});");
+                TotalOut++;
+                if (TotalOut % 250 == 0) Report($"   ... {TotalOut:N0} rows written", table);
+            }
+        }
+    }
+
+    async Task DumpFullTable(string table, SqlConnection cn, StreamWriter writer, CancellationToken ct)
+    {
+        string sql = $"SELECT TOP ({_maxRowsPerTable}) * FROM {table};";
+        await using var cmd = new SqlCommand(sql, cn);
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        var cols = Enumerable.Range(0, rdr.FieldCount).Select(i => Esc(rdr.GetName(i))).ToArray();
+        while (await rdr.ReadAsync(ct))
+        {
+            var vals = new string[rdr.FieldCount];
+            for (int i = 0; i < rdr.FieldCount; i++) vals[i] = Lit(rdr.GetValue(i));
+            await writer.WriteLineAsync(
+                $"INSERT INTO {table} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)});");
+            TotalOut++;
+            if (TotalOut % 250 == 0) Report($"   ... {TotalOut:N0} rows written", table);
+        }
+    }
+
+    // ── DB-mode helpers ──────────────────────────────────────────────────────
+
+    async Task BulkCopyRowsAsync(List<string> pkList, string pkCol, string table, string canon,
+        SqlConnection srcCn, SqlConnection destCn, CancellationToken ct)
+    {
+        var colNames = await _scripter.GetBulkColumnListAsync(srcCn, table, ct);
+        var colList = string.Join(", ", colNames.Select(c => Esc(c)));
+
+        foreach (var batch in Batch(pkList, 1000))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            string where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+            string sql = $"SELECT {colList} FROM {table} WHERE {where} ORDER BY {Esc(pkCol)} DESC;";
+
+            await using var cmd = new SqlCommand(sql, srcCn);
+            await using var rdr = await cmd.ExecuteReaderAsync(ct);
+
+            using var bcp = new SqlBulkCopy(destCn,
+                SqlBulkCopyOptions.KeepIdentity | SqlBulkCopyOptions.KeepNulls, null);
+            bcp.DestinationTableName = table;
+            bcp.BatchSize = 200;
+            bcp.BulkCopyTimeout = 0;
+
+            foreach (var col in colNames)
+                bcp.ColumnMappings.Add(col, col);
+
+            var filteringReader = new DeduplicatingDataReader(rdr, canon, pkCol, _visitedRows);
+            await bcp.WriteToServerAsync(filteringReader, ct);
+            TotalOut += filteringReader.RowsAccepted;
+
+            if (TotalOut % 250 == 0 && TotalOut > 0)
+                Report($"   ... {TotalOut:N0} rows copied", table);
+        }
+    }
+
+    async Task BulkCopyFullTableAsync(string table, SqlConnection srcCn, SqlConnection destCn, CancellationToken ct)
+    {
+        var colNames = await _scripter.GetBulkColumnListAsync(srcCn, table, ct);
+        var colList = string.Join(", ", colNames.Select(c => Esc(c)));
+
+        string sql = $"SELECT TOP ({_maxRowsPerTable}) {colList} FROM {table};";
+
+        await using var cmd = new SqlCommand(sql, srcCn);
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+
+        using var bcp = new SqlBulkCopy(destCn,
+            SqlBulkCopyOptions.KeepIdentity | SqlBulkCopyOptions.KeepNulls, null);
+        bcp.DestinationTableName = table;
+        bcp.BatchSize = 200;
+        bcp.BulkCopyTimeout = 0;
+
+        foreach (var col in colNames)
+            bcp.ColumnMappings.Add(col, col);
+
+        await bcp.WriteToServerAsync(rdr, ct);
+    }
+
+    async Task ProcessTable(string table, List<string> pkList, string canon,
+        SqlConnection srcCn, SqlConnection destCn, CancellationToken ct)
     {
         Report($"▶ {table} ... exporting up to {_maxRowsPerTable:N0} rows (have {pkList.Count})", table);
 
-        string pkCol = table == _rootTable ? _rootPkCol : await GetPkColAsync(cn, table, ct);
+        string createSql = await _scripter.GetCreateTableSqlAsync(_connStr, table, ct);
+        await using (var createCmd = new SqlCommand(createSql, destCn))
+            await createCmd.ExecuteNonQueryAsync(ct);
 
-        await DumpRows(pkList, pkCol, table, canon, cn, writer, ct);
-        await HarvestChildKeys(table, pkList, cn, ct);
+        var fkSqls = await _scripter.GetForeignKeySqlsAsync(_connStr, table, ct);
+        _fkScripts.AddRange(fkSqls);
+
+        string pkCol = table == _rootTable ? _rootPkCol : await GetPkColAsync(srcCn, table, ct);
+        await BulkCopyRowsAsync(pkList, pkCol, table, canon, srcCn, destCn, ct);
+        await HarvestChildKeys(table, pkList, srcCn, ct);
 
         _tablesProcessed++;
         Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
     }
 
-    /// <summary>
-    /// Returns all user tables as [schema].[table] names.
-    /// </summary>
     async Task<List<string>> GetAllTablesAsync(SqlConnection cn, CancellationToken ct)
     {
         const string sql = """
@@ -250,13 +325,8 @@ public class SubsetEngine
         return tables;
     }
 
-    /// <summary>
-    /// BFS through sys.foreign_keys starting from rootTable to find all tables reachable via FK chain.
-    /// Returns canonical (lowered, unbracketed) table names.
-    /// </summary>
     async Task<HashSet<string>> GetReachableTablesAsync(SqlConnection cn, CancellationToken ct)
     {
-        // Build full FK adjacency: parent -> children (both directions to cover referenced and referencing)
         const string sql = """
             SELECT
                 parentTab = QUOTENAME(OBJECT_SCHEMA_NAME(fk.referenced_object_id)) + '.' + QUOTENAME(OBJECT_NAME(fk.referenced_object_id)),
@@ -282,7 +352,6 @@ public class SubsetEngine
             cSet.Add(parent);
         }
 
-        // BFS from root
         var rootCan = Canon(_rootTable);
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootCan };
         var bfsQueue = new Queue<string>();
@@ -304,49 +373,77 @@ public class SubsetEngine
         return visited;
     }
 
-    /// <summary>
-    /// Dumps all rows (up to maxRowsPerTable) from a table with no FK filter.
-    /// </summary>
-    async Task DumpFullTable(string table, SqlConnection cn, StreamWriter writer, CancellationToken ct)
+    public async Task RunAsync(CancellationToken ct = default)
     {
-        Report($"▶ {table} (unrelated) ... exporting up to {_maxRowsPerTable:N0} rows", table);
-
-        string sql = $"SELECT TOP ({_maxRowsPerTable}) * FROM {table};";
-
-        await using var cmd = new SqlCommand(sql, cn);
-        await using var rdr = await cmd.ExecuteReaderAsync(ct);
-
-        var cols = Enumerable.Range(0, rdr.FieldCount)
-            .Select(i => Esc(rdr.GetName(i))).ToArray();
-
-        while (await rdr.ReadAsync(ct))
-        {
-            var vals = new string[rdr.FieldCount];
-            for (int i = 0; i < rdr.FieldCount; i++)
-                vals[i] = Lit(rdr.GetValue(i));
-
-            await writer.WriteLineAsync(
-                $"INSERT INTO {table} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)});");
-
-            TotalOut++;
-            if (TotalOut % 250 == 0)
-                Report($"   ... {TotalOut:N0} rows written", table);
-        }
-
-        _tablesProcessed++;
-        Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
+        if (_outFile is not null)
+            await RunFileMode(ct);
+        else
+            await RunDbMode(ct);
     }
 
-    public async Task RunAsync(CancellationToken ct = default)
+    async Task RunFileMode(CancellationToken ct)
     {
         await using var cn = new SqlConnection(_connStr);
         await cn.OpenAsync(ct);
-        await using var writer = new StreamWriter(_outFile, false, Encoding.UTF8);
+        await using var writer = new StreamWriter(_outFile!, false, Encoding.UTF8);
 
         Report($"▶ Starting subset → {_outFile}");
 
-        // === Pass 1: BFS from root row following FK relationships ===
         _rootPkCol = await GetPkColAsync(cn, _rootTable, ct);
+        _pkSets[Canon(_rootTable)] = new HashSet<string> { _rootPkVal };
+        _queue = new Queue<string>();
+        _queue.Enqueue(_rootTable);
+        _processedTables = new HashSet<string> { _rootTable };
+
+        while (_queue.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            string table = _queue.Dequeue();
+            string can = Canon(table);
+            if (_excludedTables.Contains(can)) continue;
+            if (!_pkSets.TryGetValue(can, out var pkSet) || pkSet.Count == 0) continue;
+            var pkList = pkSet.OrderByDescending(v => v, StringComparer.Ordinal).Take(_maxRowsPerTable).ToList();
+            pkSet.Clear();
+
+            Report($"▶ {table} ... exporting up to {_maxRowsPerTable:N0} rows (have {pkList.Count})", table);
+            string pkCol = table == _rootTable ? _rootPkCol : await GetPkColAsync(cn, table, ct);
+            await DumpRows(pkList, pkCol, table, can, cn, writer, ct);
+            await HarvestChildKeys(table, pkList, cn, ct);
+            _tablesProcessed++;
+            Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
+        }
+
+        Report("▶ Pass 2: exporting unrelated tables...");
+        var allTables = await GetAllTablesAsync(cn, ct);
+        var reachableTables = await GetReachableTablesAsync(cn, ct);
+        var alreadyProcessed = new HashSet<string>(_processedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var table in allTables)
+        {
+            ct.ThrowIfCancellationRequested();
+            var can = Canon(table);
+            if (reachableTables.Contains(can) || alreadyProcessed.Contains(can) || _excludedTables.Contains(can))
+                continue;
+            Report($"▶ {table} (unrelated) ... exporting up to {_maxRowsPerTable:N0} rows", table);
+            await DumpFullTable(table, cn, writer, ct);
+            _tablesProcessed++;
+            Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
+        }
+
+        Report($"✓ Complete. {TotalOut:N0} INSERTs written to {_outFile}");
+    }
+
+    async Task RunDbMode(CancellationToken ct)
+    {
+        await using var srcCn = new SqlConnection(_connStr);
+        await srcCn.OpenAsync(ct);
+        await using var destCn = new SqlConnection(_destConnStr);
+        await destCn.OpenAsync(ct);
+
+        Report("▶ Starting DB-to-DB subset");
+
+        // === Pass 1: BFS from root row following FK relationships ===
+        _rootPkCol = await GetPkColAsync(srcCn, _rootTable, ct);
         _pkSets[Canon(_rootTable)] = new HashSet<string> { _rootPkVal };
 
         _queue = new Queue<string>();
@@ -372,16 +469,15 @@ public class SubsetEngine
                 .ToList();
             pkSet.Clear();
 
-            await ProcessTable(table, pkList, can, cn, writer, ct);
+            await ProcessTable(table, pkList, can, srcCn, destCn, ct);
         }
 
         // === Pass 2: Dump unrelated tables (no FK path from root) ===
         Report("▶ Pass 2: exporting unrelated tables...");
 
-        var allTables = await GetAllTablesAsync(cn, ct);
-        var reachableTables = await GetReachableTablesAsync(cn, ct);
+        var allTables = await GetAllTablesAsync(srcCn, ct);
+        var reachableTables = await GetReachableTablesAsync(srcCn, ct);
 
-        // Collect canonical names of tables already processed in Pass 1
         var alreadyProcessed = new HashSet<string>(
             _processedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
 
@@ -391,7 +487,6 @@ public class SubsetEngine
 
             var can = Canon(table);
 
-            // Skip if reachable via FK, already processed, or excluded
             if (reachableTables.Contains(can))
                 continue;
             if (alreadyProcessed.Contains(can))
@@ -399,9 +494,107 @@ public class SubsetEngine
             if (_excludedTables.Contains(can))
                 continue;
 
-            await DumpFullTable(table, cn, writer, ct);
+            Report($"▶ {table} (unrelated) ... exporting up to {_maxRowsPerTable:N0} rows", table);
+
+            string createSql = await _scripter.GetCreateTableSqlAsync(_connStr, table, ct);
+            await using (var createCmd = new SqlCommand(createSql, destCn))
+                await createCmd.ExecuteNonQueryAsync(ct);
+
+            var fkSqls = await _scripter.GetForeignKeySqlsAsync(_connStr, table, ct);
+            _fkScripts.AddRange(fkSqls);
+
+            await BulkCopyFullTableAsync(table, srcCn, destCn, ct);
+
+            _tablesProcessed++;
+            Report($"✓ {table} done ({TotalOut:N0} total rows)", table);
         }
 
-        Report($"✓ Complete. {TotalOut:N0} INSERTs written to {_outFile}");
+        // === Pass 3: Apply FK constraints ===
+        Report("▶ Pass 3: applying FK constraints...");
+
+        foreach (var fkSql in _fkScripts.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await using var fkCmd = new SqlCommand(fkSql, destCn);
+                await fkCmd.ExecuteNonQueryAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                Report($"FK warning: {ex.Message}");
+            }
+        }
+
+        Report($"✓ Complete. {TotalOut:N0} rows copied.");
+    }
+
+    private sealed class DeduplicatingDataReader : IDataReader
+    {
+        private readonly SqlDataReader _inner;
+        private readonly string _canon;
+        private readonly string _pkCol;
+        private readonly ConcurrentDictionary<string, byte> _visited;
+
+        public long RowsAccepted { get; private set; }
+
+        public DeduplicatingDataReader(SqlDataReader inner, string canon, string pkCol,
+            ConcurrentDictionary<string, byte> visited)
+        {
+            _inner = inner;
+            _canon = canon;
+            _pkCol = pkCol;
+            _visited = visited;
+        }
+
+        public bool Read()
+        {
+            while (_inner.Read())
+            {
+                string pkVal = _inner.GetValue(_inner.GetOrdinal(_pkCol)).ToString()!;
+                string rowKey = $"{_canon}|{pkVal}";
+                if (_visited.TryAdd(rowKey, 0))
+                {
+                    RowsAccepted++;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public void Dispose() { /* caller owns _inner */ }
+
+        public object this[int i] => _inner[i];
+        public object this[string name] => _inner[name];
+        public int Depth => _inner.Depth;
+        public bool IsClosed => _inner.IsClosed;
+        public int RecordsAffected => _inner.RecordsAffected;
+        public int FieldCount => _inner.FieldCount;
+        public void Close() => _inner.Close();
+        public bool GetBoolean(int i) => _inner.GetBoolean(i);
+        public byte GetByte(int i) => _inner.GetByte(i);
+        public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length)
+            => _inner.GetBytes(i, fieldOffset, buffer, bufferoffset, length);
+        public char GetChar(int i) => _inner.GetChar(i);
+        public long GetChars(int i, long fieldoffset, char[]? buffer, int bufferoffset, int length)
+            => _inner.GetChars(i, fieldoffset, buffer, bufferoffset, length);
+        public IDataReader GetData(int i) => _inner.GetData(i);
+        public string GetDataTypeName(int i) => _inner.GetDataTypeName(i);
+        public DateTime GetDateTime(int i) => _inner.GetDateTime(i);
+        public decimal GetDecimal(int i) => _inner.GetDecimal(i);
+        public double GetDouble(int i) => _inner.GetDouble(i);
+        public Type GetFieldType(int i) => _inner.GetFieldType(i);
+        public float GetFloat(int i) => _inner.GetFloat(i);
+        public Guid GetGuid(int i) => _inner.GetGuid(i);
+        public short GetInt16(int i) => _inner.GetInt16(i);
+        public int GetInt32(int i) => _inner.GetInt32(i);
+        public long GetInt64(int i) => _inner.GetInt64(i);
+        public string GetName(int i) => _inner.GetName(i);
+        public int GetOrdinal(string name) => _inner.GetOrdinal(name);
+        public DataTable? GetSchemaTable() => _inner.GetSchemaTable();
+        public string GetString(int i) => _inner.GetString(i);
+        public object GetValue(int i) => _inner.GetValue(i);
+        public int GetValues(object[] values) => _inner.GetValues(values);
+        public bool IsDBNull(int i) => _inner.IsDBNull(i);
+        public bool NextResult() => _inner.NextResult();
     }
 }

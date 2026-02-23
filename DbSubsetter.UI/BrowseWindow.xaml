@@ -23,7 +23,12 @@
                 <TextBox Width="60"
                          Text="{Binding RowLimit, UpdateSourceTrigger=PropertyChanged}"
                          VerticalAlignment="Center" />
-                <Button Content="Refresh" Command="{Binding RefreshCommand}" Padding="8,3" />
+                <Button Command="{Binding RefreshCommand}" Padding="8,3">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE72C;" />
+                        <TextBlock Text="Refresh" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Separator />
                 <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="Gray" />
             </ToolBar>
@@ -113,10 +118,14 @@
                             <KeyBinding Key="Return" Command="{Binding ApplyWhereCommand}" />
                         </TextBox.InputBindings>
                     </TextBox>
-                    <Button Grid.Column="4" Content="Apply"
-                            Command="{Binding ApplyWhereCommand}"
+                    <Button Grid.Column="4" Command="{Binding ApplyWhereCommand}"
                             Padding="8,3" Margin="4,0,0,0"
-                            ToolTip="Re-fetch rows using the WHERE clause" />
+                            ToolTip="Re-fetch rows using the WHERE clause">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE72C;" />
+                            <TextBlock Text="Apply" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
 
                 <DataGrid ItemsSource="{Binding RowsView}"
@@ -134,12 +143,17 @@
         <!-- Row 2: Footer -->
         <DockPanel Grid.Row="2">
             <Button DockPanel.Dock="Left"
-                    Content="Use as Root"
                     Command="{Binding UseAsRootCommand}"
                     Padding="12,5"
                     FontWeight="Bold"
                     Background="#FF2196F3"
-                    Foreground="White" />
+                    Foreground="White">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="White"
+                               VerticalAlignment="Center" Margin="0,0,6,0" Text="&#xE735;" />
+                    <TextBlock Text="Use as Root" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <TextBlock VerticalAlignment="Center" Margin="12,0,0,0"
                        Foreground="Gray">
                 <Run Text="Select a row then click " />

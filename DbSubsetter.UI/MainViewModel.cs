@@ -29,6 +29,7 @@ public class MainViewModel : INotifyPropertyChanged
         };
 
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsRunning);
+        TestDestConnectionCommand = new AsyncRelayCommand(TestDestConnectionAsync, () => !IsRunning);
         BrowseOutputCommand = new RelayCommand(BrowseOutput);
         RunSubsetCommand = new AsyncRelayCommand(RunSubsetAsync, CanRunSubset);
         CancelCommand = new RelayCommand(CancelRun, () => IsRunning);
@@ -43,6 +44,8 @@ public class MainViewModel : INotifyPropertyChanged
         Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
         MaxRowsPerTable = 1000;
         IntegratedSecurity = true;
+        DestIntegratedSecurity = true;
+        IsFileMode = true;
         OutputFile = "subset.sql";
     }
 
@@ -96,6 +99,96 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _connectionOk;
         set { _connectionOk = value; OnPropertyChanged(); }
+    }
+
+    // Destination connection
+    private string _destServer = string.Empty;
+    public string DestServer
+    {
+        get => _destServer;
+        set { _destServer = value; OnPropertyChanged(); }
+    }
+
+    private string _destDatabase = string.Empty;
+    public string DestDatabase
+    {
+        get => _destDatabase;
+        set { _destDatabase = value; OnPropertyChanged(); }
+    }
+
+    private bool _destIntegratedSecurity = true;
+    public bool DestIntegratedSecurity
+    {
+        get => _destIntegratedSecurity;
+        set { _destIntegratedSecurity = value; OnPropertyChanged(); OnPropertyChanged(nameof(DestSqlAuthEnabled)); }
+    }
+
+    public bool DestSqlAuthEnabled => !DestIntegratedSecurity;
+
+    private string _destUsername = string.Empty;
+    public string DestUsername
+    {
+        get => _destUsername;
+        set { _destUsername = value; OnPropertyChanged(); }
+    }
+
+    private string _destPassword = string.Empty;
+    public string DestPassword
+    {
+        get => _destPassword;
+        set { _destPassword = value; OnPropertyChanged(); }
+    }
+
+    private string _destConnectionStatus = string.Empty;
+    public string DestConnectionStatus
+    {
+        get => _destConnectionStatus;
+        set { _destConnectionStatus = value; OnPropertyChanged(); }
+    }
+
+    private bool _destConnectionOk;
+    public bool DestConnectionOk
+    {
+        get => _destConnectionOk;
+        set { _destConnectionOk = value; OnPropertyChanged(); }
+    }
+
+    // Output mode
+    private bool _isFileMode = true;
+    public bool IsFileMode
+    {
+        get => _isFileMode;
+        set
+        {
+            _isFileMode = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsDbMode));
+            OnPropertyChanged(nameof(FilePanelVisibility));
+            OnPropertyChanged(nameof(DbPanelVisibility));
+        }
+    }
+
+    public bool IsDbMode
+    {
+        get => !_isFileMode;
+        set
+        {
+            _isFileMode = !value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsFileMode));
+            OnPropertyChanged(nameof(FilePanelVisibility));
+            OnPropertyChanged(nameof(DbPanelVisibility));
+        }
+    }
+
+    public Visibility FilePanelVisibility => _isFileMode ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility DbPanelVisibility => !_isFileMode ? Visibility.Visible : Visibility.Collapsed;
+
+    private string _outputFile = "subset.sql";
+    public string OutputFile
+    {
+        get => _outputFile;
+        set { _outputFile = value; OnPropertyChanged(); }
     }
 
     // Profiles
@@ -167,13 +260,6 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private string _outputFile = "subset.sql";
-    public string OutputFile
-    {
-        get => _outputFile;
-        set { _outputFile = value; OnPropertyChanged(); }
-    }
-
     private int _maxRowsPerTable = 1000;
     public int MaxRowsPerTable
     {
@@ -230,6 +316,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     // Commands
     public ICommand TestConnectionCommand { get; }
+    public ICommand TestDestConnectionCommand { get; }
     public ICommand BrowseOutputCommand { get; }
     public ICommand RunSubsetCommand { get; }
     public ICommand CancelCommand { get; }
@@ -253,6 +340,18 @@ public class MainViewModel : INotifyPropertyChanged
         win.Show();
     }
 
+    private void BrowseOutput()
+    {
+        var dlg = new SaveFileDialog
+        {
+            Filter = "SQL Files (*.sql)|*.sql|All Files (*.*)|*.*",
+            DefaultExt = ".sql",
+            FileName = Path.GetFileName(OutputFile)
+        };
+        if (dlg.ShowDialog() == true)
+            OutputFile = dlg.FileName;
+    }
+
     private string BuildConnectionString()
     {
         var profile = new ConnectionProfile
@@ -262,6 +361,19 @@ public class MainViewModel : INotifyPropertyChanged
             IntegratedSecurity = IntegratedSecurity,
             Username = Username,
             Password = Password
+        };
+        return profile.ToConnectionString();
+    }
+
+    private string BuildDestConnectionString()
+    {
+        var profile = new ConnectionProfile
+        {
+            Server = DestServer,
+            Database = DestDatabase,
+            IntegratedSecurity = DestIntegratedSecurity,
+            Username = DestUsername,
+            Password = DestPassword
         };
         return profile.ToConnectionString();
     }
@@ -281,6 +393,23 @@ public class MainViewModel : INotifyPropertyChanged
         {
             ConnectionStatus = $"Failed: {ex.Message}";
             ConnectionOk = false;
+        }
+    }
+
+    private async Task TestDestConnectionAsync()
+    {
+        DestConnectionStatus = "Testing...";
+        DestConnectionOk = false;
+        try
+        {
+            await _explorer.TestConnectionAsync(BuildDestConnectionString());
+            DestConnectionStatus = "Connected";
+            DestConnectionOk = true;
+        }
+        catch (Exception ex)
+        {
+            DestConnectionStatus = $"Failed: {ex.Message}";
+            DestConnectionOk = false;
         }
     }
 
@@ -360,24 +489,12 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void BrowseOutput()
-    {
-        var dlg = new SaveFileDialog
-        {
-            Filter = "SQL Files (*.sql)|*.sql|All Files (*.*)|*.*",
-            DefaultExt = ".sql",
-            FileName = Path.GetFileName(OutputFile)
-        };
-        if (dlg.ShowDialog() == true)
-            OutputFile = dlg.FileName;
-    }
-
     private bool CanRunSubset() =>
         !IsRunning &&
         ConnectionOk &&
         !string.IsNullOrWhiteSpace(SelectedTable) &&
         !string.IsNullOrWhiteSpace(RootPkValue) &&
-        !string.IsNullOrWhiteSpace(OutputFile);
+        (IsFileMode ? !string.IsNullOrWhiteSpace(OutputFile) : DestConnectionOk);
 
     private async Task RunSubsetAsync()
     {
@@ -414,7 +531,8 @@ public class MainViewModel : INotifyPropertyChanged
                 BuildConnectionString(),
                 SelectedTable!,
                 RootPkValue,
-                OutputFile,
+                destConnStr: IsDbMode ? BuildDestConnectionString() : null,
+                outFile: IsFileMode ? OutputFile : null,
                 MaxRowsPerTable,
                 progress,
                 excludedTables);
@@ -422,7 +540,10 @@ public class MainViewModel : INotifyPropertyChanged
             await Task.Run(() => engine.RunAsync(_cts.Token));
 
             TotalInserts = engine.TotalOut;
-            AddLog($"Complete! {engine.TotalOut:N0} INSERTs written to {OutputFile}");
+            if (IsFileMode)
+                AddLog($"Complete! {engine.TotalOut:N0} INSERTs written to {OutputFile}");
+            else
+                AddLog($"Complete! {engine.TotalOut:N0} rows copied to {DestDatabase} on {DestServer}");
         }
         catch (OperationCanceledException)
         {

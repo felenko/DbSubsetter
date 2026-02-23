@@ -38,4 +38,10 @@ public partial class MainWindow : Window
             vm.Password = pb.Password;
         }
     }
+
+    private void DestPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && sender is PasswordBox pb)
+            vm.DestPassword = pb.Password;
+    }
 }
