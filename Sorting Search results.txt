@@ -1,0 +1,207 @@
+---                                                                                                                                                                  
+  How the 3×3 grid fills                                                                                                                                                                                                                                                                                                                      
+  1. Grid creation — OrganizeImages() (SearchResultList.cs:985)                                                                                                        
+
+  At startup, exactly 9 SearchResultPictureBox controls are created and positioned left-to-right, top-to-bottom. The layout math fills column-by-column (column %
+  imageColumns == 0 wraps to a new row), so slots are numbered:
+
+  [0] [1] [2]
+  [3] [4] [5]
+  [6] [7] [8]
+
+  pageSize = imageRows × imageColumns = 3 × 3 = 9.
+
+  ---
+  2. Results arrive — SetFaceSearchData() (SearchResultList.cs:919)
+
+  When search results come in:
+  1. faceSearchData.PageSize = 9 is stamped on the data object so it knows the page size
+  2. faceSearchData.Page = 1 (reset to first page)
+  3. FetchResultPage() is called → delegates to FaceSearchData.FetchPersonList()
+  4. DisplayPersons() paints the 9 boxes
+
+  ---
+  3. Which 9 results go on this page — FetchPersonList() (FaceSearchData.cs:166)
+
+  startIndex = (page - 1) × pageSize   // page 1 → index 0
+
+  It walks resultListManaged from startIndex, taking up to pageSize entries, calling resultListManaged.GetScore(index, ...) for each to read (personId, score,
+  sortScore, otherId).
+
+  - otherId == null → local DB person → SQL query against SearchPersons
+  - otherId == "source~suspectId" → remote SIN/UMBRA person → SuspectFinder.search() call
+
+  After both are fetched, the final list is sorted descending by score:
+  personList.Sort(new PersonScoreComparer(!hasFaceData));  // line 694
+
+  ---
+  4. Score ordering in resultListManaged
+
+  For face search (probe image provided): resultListManaged comes from the FR engine pre-ordered by similarity score (highest first). After the page fetch, the final  
+  sort by score ensures the highest-confidence match lands at slot 0.
+
+  For multi-source (local + SIN + UMBRA): MergeResultListMap() (FaceSearchData.cs:780) interleaves the sources round-robin — 1 local, 1 from first remote, 1 from      
+  second remote, then repeat. No score sort is applied for text/demographic search, so order reflects the interleaved sequence.
+
+  ---
+  5. Painting — DisplayPersons() (SearchResultList.cs:329)
+
+  for (int index = 0; index < personList.Count && shownCount < 9; index++)
+  {
+      Person person = personList[index];
+      searchResultPictureBoxList[index].Image = person.Image;         // photo
+      searchResultPictureBoxList[index].Text = "(Local 87.3) John Doe"; // score + name
+      searchResultPictureBoxList[index].BorderColor = VCColourHelper.GetColourByScore(person.Score);
+  }
+  // remaining slots → Image=null, Text="N/A"
+
+  Border/text color is score-driven: higher score = warmer/more prominent colour.
+
+  ---
+  Summary
+
+  ┌──────────────────┬────────────────────────────────────────────────┐
+  │       Slot       │                    Contains                    │
+  ├──────────────────┼────────────────────────────────────────────────┤
+  │ [0] top-left     │ Highest-scored match on this page              │
+  ├──────────────────┼────────────────────────────────────────────────┤
+  │ [1] top-middle   │ 2nd highest                                    │
+  ├──────────────────┼────────────────────────────────────────────────┤
+  │ ...              │ ...                                            │
+  ├──────────────────┼────────────────────────────────────────────────┤
+  │ [8] bottom-right │ 9th highest (or "N/A" if fewer than 9 results) │
+  └──────────────────┴────────────────────────────────────────────────┘
+
+  Pagination buttons increment/decrement faceSearchData.Page, FetchResultPageAsync re-runs the slice with the new startIndex, and DisplayPersons repaints all 9 boxes. 
+
+✻ Sautéed for 48s                                                                                                                                                         
+❯ is there any dependency on source local vs remote , because we having different sources                                                                                                                                                                        
+● Let me look at PersonScoreComparer and how the FR engine feeds results into resultListManaged to understand the full cross-source dependency:                                                                                                                                                                                               
+● Searched for 4 patterns, read 2 files (ctrl+o to expand)                                                                                                             
+
+● Now I have the complete picture. Here's the full cross-source dependency breakdown:                                                                                  
+                                                                                                                                                                       
+  ---                                                                                                                                                                  
+  Local vs Remote source dependency                                                                                                                                                                                                                                                                                                           
+  Face search (probe image provided)                                                                                                                                   
+
+  The two source types are searched differently and in parallel (FacialRecognitionEx.cs:1859–1905):
+
+  Column 1: Image used
+  Local (L1): Cropped face (croppedImage)
+  Remote (SIN/UMBRA): Original full image (originalImage)
+  ────────────────────────────────────────
+  Column 1: How
+  Local (L1): fr.gallery.Identify(croppedImage, ...) — synchronous
+  Remote (SIN/UMBRA): FrSearchHelper.BeginSearch(originalImage, sinConnections, ...) — async, runs in parallel
+  ────────────────────────────────────────
+  Column 1: Result type
+  Local (L1): ResultList idListManagedResult — stored in ResultListManaged
+  Remote (SIN/UMBRA): Dictionary<source, List<ScoreMap>> — stored in ResultListMap
+  ────────────────────────────────────────
+  Column 1: When results land
+  Local (L1): Immediately after gallery identify
+  Remote (SIN/UMBRA): Polled: while (frSearchHelper.IsRunning) Thread.Sleep(200)
+
+  So remote search starts first (non-blocking), then local runs synchronously, then the code waits for the remote to finish before merging. The two image variants are 
+  intentional — cropped is more accurate for the local FR engine, original image is sent to remote APIs.
+
+  ---
+  Merge — MergeResultListMap() (FaceSearchData.cs:780)
+
+  After both sources finish, results are interleaved round-robin with sequential sortScore:
+
+  Round 1: 1 local (sortScore=0), 1 SIN (sortScore=1), 1 UMBRA (sortScore=2)
+  Round 2: 2nd local (sortScore=3), 2nd SIN (sortScore=4), 2nd UMBRA (sortScore=5)
+  ...
+
+  Remote sources are processed in alphabetical order (line 811 sortedKeys.Sort()), so if you have SIN and UMBRA, SIN always goes before UMBRA in each round.
+
+  ---
+  Final sort for the page display
+
+  When FetchPersonList fetches the 9 items for the current page, at the end (FaceSearchData.cs:694):
+
+  personList.Sort(new PersonScoreComparer(!hasFaceData));
+
+  For face search hasFaceData = true → PersonScoreComparer(false) → useSortScore = false → sorts purely by Score descending (ignoring the interleaved sortScore).      
+
+  So the interleaving only decides which page a result lands on — but within the 9 slots on that page, they are re-ordered highest-score-first regardless of source.   
+
+  ---
+  Text / demographic search (no probe image)
+
+  - Local: fr.FetchDemographicLimitedIdList() — local DB query
+  - Remote: all sinConnections queried in parallel via finder.searchAsync(), then waited in sequence
+  - Results merged by same MergeResultListMap() round-robin interleave
+  - But final sort uses PersonScoreComparer(true) → useSortScore = true → preserves the interleaved sortScore order (0,1,2,3...). No score re-sort.
+
+  So for text search the grid shows: local result, then SIN result, then UMBRA result, then next local, etc.
+
+  ---
+  FR initialization dependency (local-only guard)
+
+  There's one more dependency in FetchPersonList (FaceSearchData.cs:193):
+
+  shouldFilterLocalResults = hasFaceScores  (true for face search, false for text)
+
+  During face search, local results are skipped if FacialRecognitionEx.frDatabaseUptodate == false (FR DB still building). This is checked via reflection. If filtering
+   would empty the page entirely (e.g. only 2 local results available and FR not ready), there's a fallback that shows the local results anyway (line 283) to avoid an 
+  empty grid with a non-zero count.
+
+  ---
+  Summary
+
+  Face search:
+    Local  ──(cropped face)──► L1 gallery.Identify()  ──► ResultListManaged
+    Remote ──(original img)──► FrSearchHelper (async) ──► ResultListMap
+                                ↓ both done
+                           MergeResultListMap()  ← round-robin interleave
+                                ↓
+                      FetchPersonList(page N)    ← slice by position
+                                ↓
+                 personList.Sort(by Score desc) ← re-sort within page
+
+  Text search:
+    Local  ──► DB query                     ──► ResultListManaged
+    Remote ──► searchAsync() × all sources  ──► ResultListMap
+                           MergeResultListMap()  ← round-robin interleave
+                      FetchPersonList(page N)    ← slice by position
+                 personList.Sort(by SortScore)  ← preserves interleave order
+
+ | Feature                        | Old (VC6Backup)                                      | New (visualcasino6)                                    |                   
+  |--------------------------------|------------------------------------------------------|--------------------------------------------------------|
+  | Interleave unit                | 3 results per source (one full grid row)             | 1 result per source (slot-by-slot)                     |
+  | resultListManaged.Sort()       | Called after merge (face=by score, text=by original) | Commented out — not called                             |
+  | AddScoreMix                    | Called but inner logic commented out → AppendScore   | Not used — replaced by explicit AppendScore/AddScore   |
+  | FR init guard                  | None — local always shown                            | Skips local if FR not ready; fallback if page is empty |
+  | PersonScoreComparer tiebreaker | SortScore → Score → PersonId                         | SortScore → Score only                                 |
+  
+   - Local results come directly from fr.gallery.Identify(...) — the FR engine returns results pre-sorted by similarity score, highest first. So the local              
+  resultListManaged before AdjustSortScores is [score=95, score=88, score=76, score=71, ...]                                                                           
+  - Remote results come from FrSearchHelper — the remote FR API also returns its candidates sorted by score descending
+
+  AdjustSortScore doesn't reorder anything within a source — it only stretches the spacing between the blocks to create interleaved slots, while keeping the relative  
+  order inside each source intact:
+
+  Before adjust (local, n=2):  sortScores = 0, 1, 2, 3, 4, 5 ...
+  After AdjustSortScores:                      0, 1, 2, 6, 7, 8 ...  ← gap created for remote
+
+  Remote (offset = 3*1 = 3):  sortScores = 0, 1, 2, 3, 4, 5 ...
+  After AdjustSortScore:                       3, 4, 5, 9,10,11 ...  ← slotted into the gaps
+
+  So the final merged order was:
+
+  sortScore 0 → local  #1  (best local match)
+  sortScore 1 → local  #2
+  sortScore 2 → local  #3
+  sortScore 3 → remote #1  (best remote match)
+  sortScore 4 → remote #2
+  sortScore 5 → remote #3
+  sortScore 6 → local  #4
+  ...
+
+  However — for face search, PersonScoreComparer(false) runs at the end and re-sorts the 9 fetched results purely by score, which breaks the row grouping within that  
+  page. The interleaving really only guaranteed which 9 items landed on which page, not the visual row order on the page itself.
+
+  For text/demographic search it did hold: PersonScoreComparer(true) respects SortScore, so the 3-per-source row grouping was fully preserved on screen.

@@ -62,3 +62,12 @@ C:\Users\kfelenko\source\repos\DbSubsetter\obj\Debug\net8.0\refint\DbSubsetter.d
 C:\Users\kfelenko\source\repos\DbSubsetter\obj\Debug\net8.0\DbSubsetter.pdb
 C:\Users\kfelenko\source\repos\DbSubsetter\obj\Debug\net8.0\DbSubsetter.genruntimeconfig.cache
 C:\Users\kfelenko\source\repos\DbSubsetter\obj\Debug\net8.0\ref\DbSubsetter.dll
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.csproj.AssemblyReference.cache
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.GeneratedMSBuildEditorConfig.editorconfig
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.AssemblyInfoInputs.cache
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.AssemblyInfo.cs
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.csproj.CoreCompileInputs.cache
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.sourcelink.json
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.dll
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\refint\DbSubsetter.dll
+C:\Source\Claude\DBSubsetter\obj\Debug\net8.0\DbSubsetter.pdb

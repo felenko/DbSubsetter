@@ -37,6 +37,8 @@ public class MainViewModel : INotifyPropertyChanged
         RefreshTablesCommand = new AsyncRelayCommand(RefreshTablesAsync, () => !IsRunning && ConnectionOk);
         SelectAllTablesCommand = new RelayCommand(SelectAllTables);
         DeselectAllTablesCommand = new RelayCommand(DeselectAllTables);
+        LoadRootCandidatesCommand = new AsyncRelayCommand(LoadRootCandidatesAsync, CanLoadRootCandidates);
+        OpenBrowserCommand = new RelayCommand(OpenBrowser, () => ConnectionOk);
 
         Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
         MaxRowsPerTable = 1000;
@@ -149,6 +151,22 @@ public class MainViewModel : INotifyPropertyChanged
         set { _rootPkValue = value; OnPropertyChanged(); }
     }
 
+    /// <summary>Sample rows from the root table for choosing the root entry (PK value).</summary>
+    public ObservableCollection<RootRowCandidate> RootRowCandidates { get; } = new();
+
+    private RootRowCandidate? _selectedRootRow;
+    public RootRowCandidate? SelectedRootRow
+    {
+        get => _selectedRootRow;
+        set
+        {
+            _selectedRootRow = value;
+            OnPropertyChanged();
+            if (value is not null)
+                RootPkValue = value.PkValue;
+        }
+    }
+
     private string _outputFile = "subset.sql";
     public string OutputFile
     {
@@ -220,6 +238,20 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand RefreshTablesCommand { get; }
     public ICommand SelectAllTablesCommand { get; }
     public ICommand DeselectAllTablesCommand { get; }
+    public ICommand LoadRootCandidatesCommand { get; }
+    public ICommand OpenBrowserCommand { get; }
+
+    private void OpenBrowser()
+    {
+        var win = new BrowseWindow(BuildConnectionString(), (table, pkVal) =>
+        {
+            SelectedTable = table;
+            RootPkValue = pkVal;
+            AddLog($"Browser: selected {table} PK={pkVal}");
+        });
+        win.Owner = Application.Current.MainWindow;
+        win.Show();
+    }
 
     private string BuildConnectionString()
     {
@@ -294,6 +326,37 @@ public class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             PrimaryKeyColumn = $"Error: {ex.Message}";
+        }
+    }
+
+    private bool CanLoadRootCandidates() =>
+        !IsRunning && ConnectionOk &&
+        !string.IsNullOrWhiteSpace(SelectedTable) &&
+        !string.IsNullOrWhiteSpace(PrimaryKeyColumn) &&
+        PrimaryKeyColumn != "(no PK found)";
+
+    private async Task LoadRootCandidatesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedTable) || string.IsNullOrWhiteSpace(PrimaryKeyColumn) ||
+            PrimaryKeyColumn == "(no PK found)")
+            return;
+        try
+        {
+            RootRowCandidates.Clear();
+            SelectedRootRow = null;
+            AddLog("Loading sample rows from root table...");
+            var rows = await _explorer.GetSampleRowsAsync(
+                BuildConnectionString(),
+                SelectedTable!,
+                PrimaryKeyColumn,
+                limit: 200);
+            foreach (var r in rows)
+                RootRowCandidates.Add(r);
+            AddLog($"Loaded {rows.Count} row(s). Select one as root entry.");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Error loading rows: {ex.Message}");
         }
     }
 

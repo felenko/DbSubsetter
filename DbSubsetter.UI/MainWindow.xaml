@@ -86,6 +86,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="120" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
@@ -100,6 +101,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <ComboBox Grid.Column="0" IsEditable="True"
                               ItemsSource="{Binding Tables}"
@@ -107,6 +109,10 @@
                               IsEnabled="{Binding ConnectionOk}" />
                     <Button Grid.Column="1" Content="Refresh"
                             Command="{Binding RefreshTablesCommand}" Padding="8,4" />
+                    <Button Grid.Column="2" Content="Browse DB..."
+                            Command="{Binding OpenBrowserCommand}"
+                            IsEnabled="{Binding ConnectionOk}"
+                            Padding="8,4" Margin="4,0,0,0" />
                 </Grid>
                 <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
                     <Label Content="PK Column:" />
@@ -114,16 +120,41 @@
                 </StackPanel>
 
                 <Label Grid.Row="1" Grid.Column="0" Content="PK Value:" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RootPkValue, UpdateSourceTrigger=PropertyChanged}" />
-                <Label Grid.Row="1" Grid.Column="2" Content="Max Rows:" />
-                <TextBox Grid.Row="1" Grid.Column="3" Width="80"
-                         Text="{Binding MaxRowsPerTable, UpdateSourceTrigger=PropertyChanged}" />
+                <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" Text="{Binding RootPkValue, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Type a PK value, or load rows below and select one" />
+                    <Button Grid.Column="1" Content="Load rows..."
+                            Command="{Binding LoadRootCandidatesCommand}" Padding="8,4" Margin="8,0,0,0"
+                            ToolTip="Load sample rows from the root table to pick the root entry" />
+                </Grid>
 
-                <Label Grid.Row="2" Grid.Column="0" Content="Output File:" />
-                <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
-                         Text="{Binding OutputFile, UpdateSourceTrigger=PropertyChanged}" />
-                <Button Grid.Row="2" Grid.Column="3" Content="Browse..."
-                        Command="{Binding BrowseOutputCommand}" Padding="8,4" />
+                <Label Grid.Row="2" Grid.Column="0" Content="Pick row:" VerticalAlignment="Top" Margin="0,4,0,0" />
+                <ListBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,4,0,0"
+                         ItemsSource="{Binding RootRowCandidates}"
+                         SelectedItem="{Binding SelectedRootRow}"
+                         DisplayMemberPath="Display"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         BorderThickness="1" BorderBrush="LightGray"
+                         ToolTip="Load rows first, then select one to set PK Value above" />
+
+                <Label Grid.Row="3" Grid.Column="0" Content="Max Rows:" />
+                <TextBox Grid.Row="3" Grid.Column="1" Width="80"
+                         Text="{Binding MaxRowsPerTable, UpdateSourceTrigger=PropertyChanged}" />
+                <Label Grid.Row="3" Grid.Column="2" Content="Output File:" Margin="12,0,0,0" />
+                <Grid Grid.Row="3" Grid.Column="3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" Margin="0,0,4,0"
+                             Text="{Binding OutputFile, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Column="1" Content="Browse..."
+                            Command="{Binding BrowseOutputCommand}" Padding="8,4" />
+                </Grid>
             </Grid>
         </GroupBox>
 
