@@ -1,3 +1,8 @@
 ################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
+/.claude
+/DbSubsetter.Core/bin/Debug/net8.0
+/DbSubsetter.Core/obj/Debug/net8.0
+/DbSubsetter.Core/obj
+/obj/Debug/net8.0
