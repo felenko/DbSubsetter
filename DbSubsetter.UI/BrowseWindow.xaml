@@ -4,7 +4,8 @@
         xmlns:local="clr-namespace:DbSubsetter.UI"
         Title="Database Browser" Height="600" Width="1100"
         MinHeight="400" MinWidth="700"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/BrowseIcon32.png">
     <Window.Resources>
         <local:BoolToCheckMarkConverter x:Key="BoolToCheckConverter" />
     </Window.Resources>

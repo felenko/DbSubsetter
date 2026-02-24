@@ -12,4 +12,11 @@
     <ProjectReference Include="..\DbSubsetter.Core\DbSubsetter.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Icons\AppIcon.ico" />
+    <Resource Include="Icons\BrowseIcon.ico" />
+    <Resource Include="Icons\AppIcon32.png" />
+    <Resource Include="Icons\BrowseIcon32.png" />
+  </ItemGroup>
+
 </Project>

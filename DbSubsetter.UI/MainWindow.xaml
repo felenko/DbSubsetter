@@ -4,7 +4,8 @@
         xmlns:local="clr-namespace:DbSubsetter.UI"
         Title="DbSubsetter" Height="820" Width="800"
         MinHeight="650" MinWidth="650"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/AppIcon32.png">
     <Window.DataContext>
         <local:MainViewModel />
     </Window.DataContext>
