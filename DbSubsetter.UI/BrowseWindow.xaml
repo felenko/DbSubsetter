@@ -5,7 +5,7 @@
         Title="Database Browser" Height="600" Width="1100"
         MinHeight="400" MinWidth="700"
         WindowStartupLocation="CenterOwner"
-        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/BrowseIcon32.png">
+        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/BrowseIcon.png">
     <Window.Resources>
         <local:BoolToCheckMarkConverter x:Key="BoolToCheckConverter" />
     </Window.Resources>

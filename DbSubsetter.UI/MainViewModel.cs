@@ -13,8 +13,9 @@ namespace DbSubsetter.UI;
 
 public class MainViewModel : INotifyPropertyChanged
 {
-    private readonly SchemaExplorer _explorer = new();
     private readonly ProfileManager _profileManager = new();
+
+    private ISchemaExplorer GetExplorer() => SchemaExplorerFactory.Create(Provider);
     private readonly DispatcherTimer _elapsedTimer;
     private CancellationTokenSource? _cts;
     private Stopwatch? _stopwatch;
@@ -40,6 +41,7 @@ public class MainViewModel : INotifyPropertyChanged
         DeselectAllTablesCommand = new RelayCommand(DeselectAllTables);
         LoadRootCandidatesCommand = new AsyncRelayCommand(LoadRootCandidatesAsync, CanLoadRootCandidates);
         OpenBrowserCommand = new RelayCommand(OpenBrowser, () => ConnectionOk);
+        BrowseDatabaseFileCommand = new RelayCommand(BrowseDatabaseFile);
 
         Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
         MaxRowsPerTable = 1000;
@@ -50,6 +52,37 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     // Connection
+    private DatabaseProvider _provider = DatabaseProvider.SqlServer;
+    public DatabaseProvider Provider
+    {
+        get => _provider;
+        set
+        {
+            _provider = value;
+            if (value == DatabaseProvider.MySql || value == DatabaseProvider.Postgres)
+                IntegratedSecurity = false;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSqlServer));
+            OnPropertyChanged(nameof(IsSQLite));
+            OnPropertyChanged(nameof(IsMySqlOrPostgres));
+            OnPropertyChanged(nameof(ShowServerDatabase));
+            OnPropertyChanged(nameof(ShowIntegratedSecurity));
+            OnPropertyChanged(nameof(UserPasswordEnabled));
+            OnPropertyChanged(nameof(ServerLabel));
+        }
+    }
+    public Array ProviderList => Enum.GetValues(typeof(DatabaseProvider));
+    public bool IsSqlServer => Provider == DatabaseProvider.SqlServer;
+    public bool IsSQLite => Provider == DatabaseProvider.SQLite;
+    public bool IsMySqlOrPostgres => Provider == DatabaseProvider.MySql || Provider == DatabaseProvider.Postgres;
+    /// <summary>Show Server + Database fields (SQL Server, MySQL, Postgres).</summary>
+    public bool ShowServerDatabase => IsSqlServer || IsMySqlOrPostgres;
+    /// <summary>Show Integrated Security checkbox (SQL Server only).</summary>
+    public bool ShowIntegratedSecurity => IsSqlServer;
+    /// <summary>User/Password enabled when SQL auth (SQL Server) or always for MySQL/Postgres.</summary>
+    public bool UserPasswordEnabled => IsMySqlOrPostgres || (IsSqlServer && SqlAuthEnabled);
+    public string ServerLabel => IsSQLite ? "Database file:" : "Server:";
+
     private string _server = string.Empty;
     public string Server
     {
@@ -204,6 +237,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             if (value is not null)
             {
+                Provider = value.Provider;
                 Server = value.Server;
                 Database = value.Database;
                 IntegratedSecurity = value.IntegratedSecurity;
@@ -327,10 +361,11 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand DeselectAllTablesCommand { get; }
     public ICommand LoadRootCandidatesCommand { get; }
     public ICommand OpenBrowserCommand { get; }
+    public ICommand BrowseDatabaseFileCommand { get; }
 
     private void OpenBrowser()
     {
-        var win = new BrowseWindow(BuildConnectionString(), (table, pkVal) =>
+        var win = new BrowseWindow(Provider, BuildConnectionString(), (table, pkVal) =>
         {
             SelectedTable = table;
             RootPkValue = pkVal;
@@ -356,6 +391,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         var profile = new ConnectionProfile
         {
+            Provider = Provider,
             Server = Server,
             Database = Database,
             IntegratedSecurity = IntegratedSecurity,
@@ -384,7 +420,7 @@ public class MainViewModel : INotifyPropertyChanged
         ConnectionOk = false;
         try
         {
-            await _explorer.TestConnectionAsync(BuildConnectionString());
+            await GetExplorer().TestConnectionAsync(BuildConnectionString());
             ConnectionStatus = "Connected";
             ConnectionOk = true;
             await RefreshTablesAsync();
@@ -402,7 +438,7 @@ public class MainViewModel : INotifyPropertyChanged
         DestConnectionOk = false;
         try
         {
-            await _explorer.TestConnectionAsync(BuildDestConnectionString());
+            await new SchemaExplorer().TestConnectionAsync(BuildDestConnectionString());
             DestConnectionStatus = "Connected";
             DestConnectionOk = true;
         }
@@ -417,7 +453,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            var tables = await _explorer.GetTablesAsync(BuildConnectionString());
+            var tables = await GetExplorer().GetTablesAsync(BuildConnectionString());
             Tables.Clear();
             TableSelections.Clear();
             foreach (var t in tables)
@@ -449,7 +485,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         try
         {
-            var pk = await _explorer.GetPrimaryKeyColumnAsync(BuildConnectionString(), table);
+            var pk = await GetExplorer().GetPrimaryKeyColumnAsync(BuildConnectionString(), table);
             PrimaryKeyColumn = pk ?? "(no PK found)";
         }
         catch (Exception ex)
@@ -474,11 +510,7 @@ public class MainViewModel : INotifyPropertyChanged
             RootRowCandidates.Clear();
             SelectedRootRow = null;
             AddLog("Loading sample rows from root table...");
-            var rows = await _explorer.GetSampleRowsAsync(
-                BuildConnectionString(),
-                SelectedTable!,
-                PrimaryKeyColumn,
-                limit: 200);
+            var rows = await GetExplorer().GetSampleRowsAsync(BuildConnectionString(), SelectedTable!, PrimaryKeyColumn, 200);
             foreach (var r in rows)
                 RootRowCandidates.Add(r);
             AddLog($"Loaded {rows.Count} row(s). Select one as root entry.");
@@ -494,7 +526,9 @@ public class MainViewModel : INotifyPropertyChanged
         ConnectionOk &&
         !string.IsNullOrWhiteSpace(SelectedTable) &&
         !string.IsNullOrWhiteSpace(RootPkValue) &&
-        (IsFileMode ? !string.IsNullOrWhiteSpace(OutputFile) : DestConnectionOk);
+        (IsSQLite || Provider == DatabaseProvider.MySql || Provider == DatabaseProvider.Postgres
+            ? !string.IsNullOrWhiteSpace(OutputFile)
+            : (IsFileMode ? !string.IsNullOrWhiteSpace(OutputFile) : DestConnectionOk));
 
     private async Task RunSubsetAsync()
     {
@@ -527,23 +561,51 @@ public class MainViewModel : INotifyPropertyChanged
                 .Select(ts => ts.Name)
                 .ToList();
 
-            var engine = new SubsetEngine(
-                BuildConnectionString(),
-                SelectedTable!,
-                RootPkValue,
-                destConnStr: IsDbMode ? BuildDestConnectionString() : null,
-                outFile: IsFileMode ? OutputFile : null,
-                MaxRowsPerTable,
-                progress,
-                excludedTables);
-
-            await Task.Run(() => engine.RunAsync(_cts.Token));
-
-            TotalInserts = engine.TotalOut;
-            if (IsFileMode)
-                AddLog($"Complete! {engine.TotalOut:N0} INSERTs written to {OutputFile}");
+            if (IsSQLite)
+            {
+                var engineSqlite = new SubsetEngineSqlite(
+                    BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
+                    MaxRowsPerTable, progress, excludedTables);
+                await Task.Run(() => engineSqlite.RunAsync(_cts.Token));
+                TotalInserts = engineSqlite.TotalOut;
+                AddLog($"Complete! {engineSqlite.TotalOut:N0} INSERTs written to {OutputFile}");
+            }
+            else if (Provider == DatabaseProvider.MySql)
+            {
+                var engineMySql = new SubsetEngineMySql(
+                    BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
+                    MaxRowsPerTable, progress, excludedTables);
+                await Task.Run(() => engineMySql.RunAsync(_cts.Token));
+                TotalInserts = engineMySql.TotalOut;
+                AddLog($"Complete! {engineMySql.TotalOut:N0} INSERTs written to {OutputFile}");
+            }
+            else if (Provider == DatabaseProvider.Postgres)
+            {
+                var enginePostgres = new SubsetEnginePostgres(
+                    BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
+                    MaxRowsPerTable, progress, excludedTables);
+                await Task.Run(() => enginePostgres.RunAsync(_cts.Token));
+                TotalInserts = enginePostgres.TotalOut;
+                AddLog($"Complete! {enginePostgres.TotalOut:N0} INSERTs written to {OutputFile}");
+            }
             else
-                AddLog($"Complete! {engine.TotalOut:N0} rows copied to {DestDatabase} on {DestServer}");
+            {
+                var engine = new SubsetEngine(
+                    BuildConnectionString(),
+                    SelectedTable!,
+                    RootPkValue,
+                    destConnStr: IsDbMode ? BuildDestConnectionString() : null,
+                    outFile: IsFileMode ? OutputFile : null,
+                    MaxRowsPerTable,
+                    progress,
+                    excludedTables);
+                await Task.Run(() => engine.RunAsync(_cts.Token));
+                TotalInserts = engine.TotalOut;
+                if (IsFileMode)
+                    AddLog($"Complete! {engine.TotalOut:N0} INSERTs written to {OutputFile}");
+                else
+                    AddLog($"Complete! {engine.TotalOut:N0} rows copied to {DestDatabase} on {DestServer}");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -573,11 +635,18 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void SaveProfile()
     {
-        var name = Server + "/" + Database;
+        var name = Provider switch
+        {
+            DatabaseProvider.SQLite => "SQLite: " + Path.GetFileName(Server),
+            DatabaseProvider.MySql => "MySQL: " + Server + "/" + Database,
+            DatabaseProvider.Postgres => "Postgres: " + Server + "/" + Database,
+            _ => Server + "/" + Database
+        };
         var existing = Profiles.FirstOrDefault(p => p.Name == name);
         var profile = new ConnectionProfile
         {
             Name = name,
+            Provider = Provider,
             Server = Server,
             Database = Database,
             IntegratedSecurity = IntegratedSecurity,
@@ -602,6 +671,18 @@ public class MainViewModel : INotifyPropertyChanged
         _profileManager.Save(Profiles.ToList());
         SelectedProfile = null;
         AddLog($"Profile '{name}' deleted");
+    }
+
+    private void BrowseDatabaseFile()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "SQLite databases (*.db;*.db3;*.sqlite)|*.db;*.db3;*.sqlite|All files (*.*)|*.*",
+            DefaultExt = ".db",
+            Title = "Select SQLite database file"
+        };
+        if (dlg.ShowDialog() == true)
+            Server = dlg.FileName;
     }
 
     private void AddLog(string message)

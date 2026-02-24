@@ -3,7 +3,7 @@ using Microsoft.Data.SqlClient;
 
 namespace DbSubsetter.Core;
 
-public class SchemaExplorer
+public class SchemaExplorer : ISchemaExplorer
 {
     public async Task<bool> TestConnectionAsync(string connectionString, CancellationToken ct = default)
     {

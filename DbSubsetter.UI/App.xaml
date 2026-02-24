@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <!-- Icon and color scheme: green primary (#4CAF50), muted blue-gray for secondary icons -->
         <!-- Fallback to Segoe UI Symbol if MDL2 Assets not available (e.g. older Windows) -->
         <FontFamily x:Key="IconFont">Segoe MDL2 Assets, Segoe UI Symbol</FontFamily>

@@ -11,20 +11,28 @@ public class BrowseViewModel : INotifyPropertyChanged
 {
     private readonly string _connectionString;
     private readonly Action<string, string> _useAsRoot;
-    private readonly SchemaExplorer _explorer = new();
+    private readonly ISchemaExplorer _explorer;
     private CancellationTokenSource? _cts;
+
     private DataTable? _currentTable;
 
-    public BrowseViewModel(string connectionString, Action<string, string> useAsRoot)
+    public BrowseViewModel(DatabaseProvider provider, string connectionString, Action<string, string> useAsRoot)
     {
         _connectionString = connectionString;
         _useAsRoot = useAsRoot;
+        _explorer = SchemaExplorerFactory.Create(provider);
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         UseAsRootCommand = new RelayCommand(UseAsRoot, CanUseAsRoot);
         ApplyWhereCommand = new AsyncRelayCommand(ApplyWhereAsync, () => SelectedTable is not null);
 
         _ = RefreshAsync();
+    }
+
+    [Obsolete("Use constructor with DatabaseProvider")]
+    public BrowseViewModel(string connectionString, Action<string, string> useAsRoot)
+        : this(DatabaseProvider.SqlServer, connectionString, useAsRoot)
+    {
     }
 
     public ObservableCollection<string> Tables { get; } = new();

@@ -15,8 +15,8 @@
   <ItemGroup>
     <Resource Include="Icons\AppIcon.ico" />
     <Resource Include="Icons\BrowseIcon.ico" />
-    <Resource Include="Icons\AppIcon32.png" />
-    <Resource Include="Icons\BrowseIcon32.png" />
+    <Resource Include="Icons\AppIcon.png" />
+    <Resource Include="Icons\BrowseIcon.png" />
   </ItemGroup>
 
 </Project>

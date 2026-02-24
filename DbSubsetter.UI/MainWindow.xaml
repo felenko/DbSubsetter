@@ -5,7 +5,7 @@
         Title="DbSubsetter" Height="820" Width="800"
         MinHeight="650" MinWidth="650"
         WindowStartupLocation="CenterScreen"
-        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/AppIcon32.png">
+        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/AppIcon.png">
     <Window.DataContext>
         <local:MainViewModel />
     </Window.DataContext>
@@ -35,9 +35,14 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Row 0: Profile, Server, Database -->
-                <Label Grid.Row="0" Grid.Column="0" Content="Profile:" />
-                <Grid Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2">
+                <!-- Row 0: Provider, Profile, Save, Delete -->
+                <Label Grid.Row="0" Grid.Column="0" Content="Provider:" />
+                <ComboBox Grid.Row="0" Grid.Column="1" Width="120" HorizontalAlignment="Left"
+                          ItemsSource="{Binding ProviderList}"
+                          SelectedItem="{Binding Provider}"
+                          ToolTip="SQL Server or SQLite database" />
+                <Label Grid.Row="0" Grid.Column="2" Content="Profile:" Margin="12,0,0,0" />
+                <Grid Grid.Row="0" Grid.Column="3" Grid.ColumnSpan="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -61,12 +66,17 @@
                     </Button>
                 </Grid>
 
-                <Label Grid.Row="1" Grid.Column="0" Content="Server:" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}" />
-
-                <Label Grid.Row="1" Grid.Column="2" Content="Database:" Margin="12,4,0,0" />
-                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}" />
-
+                <!-- Row 1: Server / Database file + Test -->
+                <Label Grid.Row="1" Grid.Column="0" Content="{Binding ServerLabel}" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="SQL Server: server name. SQLite: path to .db file" />
+                <Button Grid.Row="1" Grid.Column="2" Content="Browse..." Command="{Binding BrowseDatabaseFileCommand}"
+                        Padding="8,4" Margin="4,0,0,0"
+                        Visibility="{Binding IsSQLite, Converter={StaticResource BoolToVis}}" />
+                <Label Grid.Row="1" Grid.Column="2" Content="Database:" Margin="12,4,0,0"
+                       Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
+                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}"
+                         Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
                 <Button Grid.Row="1" Grid.Column="4" Command="{Binding TestConnectionCommand}" Padding="8,4">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xEC25;" />
@@ -74,23 +84,26 @@
                     </StackPanel>
                 </Button>
 
-                <!-- Row 2: Auth -->
+                <!-- Row 2: Auth (SQL Server: IntSec + User/Pass; MySQL/Postgres: User/Pass only) -->
                 <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="Integrated Security"
-                          IsChecked="{Binding IntegratedSecurity}" />
+                          IsChecked="{Binding IntegratedSecurity}"
+                          Visibility="{Binding ShowIntegratedSecurity, Converter={StaticResource BoolToVis}}" />
 
                 <Label Grid.Row="2" Grid.Column="2" Content="User:" Margin="12,4,0,0"
-                       IsEnabled="{Binding SqlAuthEnabled}" />
-                <Grid Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="2">
+                       IsEnabled="{Binding UserPasswordEnabled}"
+                       Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
+                <Grid Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="2"
+                      Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding SqlAuthEnabled}" />
-                    <Label Grid.Column="1" Content="Pass:" IsEnabled="{Binding SqlAuthEnabled}" />
+                             IsEnabled="{Binding UserPasswordEnabled}" />
+                    <Label Grid.Column="1" Content="Pass:" IsEnabled="{Binding UserPasswordEnabled}" />
                     <PasswordBox Grid.Column="2" x:Name="PasswordBox"
-                                 IsEnabled="{Binding SqlAuthEnabled}"
+                                 IsEnabled="{Binding UserPasswordEnabled}"
                                  PasswordChanged="PasswordBox_PasswordChanged" />
                 </Grid>
             </Grid>
