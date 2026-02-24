@@ -1,6 +1,7 @@
-using DbSubsetter.Core;
+
 using Serilog;
 using System.Diagnostics;
+using DbSubsetter.Core;
 
 string connStr = args[0];
 var rootTable = "[dbo].[Divisions]";
