@@ -7,3 +7,8 @@
 /DbSubsetter.Core/obj
 /obj/Debug/net8.0
 .vs/
+/DbSubsetter.UI/bin/Debug/net8.0-windows
+/DbSubsetter.UI/obj/Debug/net8.0-windows
+/DbSubsetter.UI/obj
+.vs/vs17
+.vs/DbSubsetter
