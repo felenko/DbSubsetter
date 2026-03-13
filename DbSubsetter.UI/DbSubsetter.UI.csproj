@@ -6,7 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Icons\dbsubsetter_icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Icons\dbsubsetter_icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DbSubsetter.Core\DbSubsetter.Core.csproj" />
@@ -17,6 +22,7 @@
     <Resource Include="Icons\BrowseIcon.ico" />
     <Resource Include="Icons\AppIcon.png" />
     <Resource Include="Icons\BrowseIcon.png" />
+    <Resource Include="Icons\dbsubsetter_icon.png" />
   </ItemGroup>
 
 </Project>

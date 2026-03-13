@@ -43,6 +43,14 @@ public class MainViewModel : INotifyPropertyChanged
         OpenBrowserCommand = new RelayCommand(OpenBrowser, () => ConnectionOk);
         BrowseDatabaseFileCommand = new RelayCommand(BrowseDatabaseFile);
 
+        GoToStepCommand = new RelayCommand(param =>
+        {
+            if (int.TryParse(param?.ToString(), out int step))
+                CurrentStep = step;
+        });
+        NextStepCommand = new RelayCommand(() => CurrentStep++, () => CanGoNext);
+        PreviousStepCommand = new RelayCommand(() => CurrentStep--, () => CanGoBack);
+
         Profiles = new ObservableCollection<ConnectionProfile>(_profileManager.Load());
         MaxRowsPerTable = 1000;
         IntegratedSecurity = true;
@@ -362,6 +370,9 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand LoadRootCandidatesCommand { get; }
     public ICommand OpenBrowserCommand { get; }
     public ICommand BrowseDatabaseFileCommand { get; }
+    public ICommand GoToStepCommand { get; }
+    public ICommand NextStepCommand { get; }
+    public ICommand PreviousStepCommand { get; }
 
     private void OpenBrowser()
     {
@@ -492,6 +503,8 @@ public class MainViewModel : INotifyPropertyChanged
         {
             PrimaryKeyColumn = $"Error: {ex.Message}";
         }
+        // Re-evaluate CanLoadRootCandidates (and other commands) now that PK is known
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private bool CanLoadRootCandidates() =>
@@ -690,6 +703,60 @@ public class MainViewModel : INotifyPropertyChanged
         var entry = $"[{DateTime.Now:HH:mm:ss}] {message}";
         LogEntries.Add(entry);
     }
+
+    // ── Wizard navigation ────────────────────────────────────────────────
+
+    private int _currentStep = 1;
+    public int CurrentStep
+    {
+        get => _currentStep;
+        set
+        {
+            _currentStep = Math.Clamp(value, 1, 5);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StepTitle));
+            OnPropertyChanged(nameof(StepSubtitle));
+            OnPropertyChanged(nameof(Step1Visible));
+            OnPropertyChanged(nameof(Step2Visible));
+            OnPropertyChanged(nameof(Step3Visible));
+            OnPropertyChanged(nameof(Step4Visible));
+            OnPropertyChanged(nameof(Step5Visible));
+            OnPropertyChanged(nameof(CanGoBack));
+            OnPropertyChanged(nameof(CanGoNext));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string StepTitle => CurrentStep switch
+    {
+        1 => "Connection",
+        2 => "Root Data",
+        3 => "Tables",
+        4 => "Destination",
+        5 => "Run",
+        _ => string.Empty
+    };
+
+    public string StepSubtitle => CurrentStep switch
+    {
+        1 => "Configure source database connection",
+        2 => "Select root table and entry point",
+        3 => "Choose which tables to include",
+        4 => "Configure output destination",
+        5 => "Execute and monitor the subset",
+        _ => string.Empty
+    };
+
+    public Visibility Step1Visible => CurrentStep == 1 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility Step2Visible => CurrentStep == 2 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility Step3Visible => CurrentStep == 3 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility Step4Visible => CurrentStep == 4 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility Step5Visible => CurrentStep == 5 ? Visibility.Visible : Visibility.Collapsed;
+
+    public bool CanGoBack => CurrentStep > 1;
+    public bool CanGoNext => CurrentStep < 5;
+
+    // ─────────────────────────────────────────────────────────────────────
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)

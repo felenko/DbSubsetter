@@ -2,369 +2,832 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:DbSubsetter.UI"
-        Title="DbSubsetter" Height="820" Width="800"
-        MinHeight="650" MinWidth="650"
+        Title="DBSubsetter"
+        Height="720" Width="1040"
+        MinHeight="600" MinWidth="860"
         WindowStartupLocation="CenterScreen"
-        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/AppIcon.png">
+        Icon="pack://application:,,,/DbSubsetter.UI;component/Icons/dbsubsetter_icon.png">
+
+    <Window.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#2A2A4A" Offset="0"/>
+            <GradientStop Color="#1E1E2E" Offset="1"/>
+        </LinearGradientBrush>
+    </Window.Background>
+
     <Window.DataContext>
-        <local:MainViewModel />
+        <local:MainViewModel/>
     </Window.DataContext>
-    <Grid Margin="8">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
 
-        <!-- Connection Panel -->
-        <GroupBox Grid.Row="0" Header="Connection" Padding="8">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-                <!-- Row 0: Provider, Profile, Save, Delete -->
-                <Label Grid.Row="0" Grid.Column="0" Content="Provider:" />
-                <ComboBox Grid.Row="0" Grid.Column="1" Width="120" HorizontalAlignment="Left"
-                          ItemsSource="{Binding ProviderList}"
-                          SelectedItem="{Binding Provider}"
-                          ToolTip="SQL Server or SQLite database" />
-                <Label Grid.Row="0" Grid.Column="2" Content="Profile:" Margin="12,0,0,0" />
-                <Grid Grid.Row="0" Grid.Column="3" Grid.ColumnSpan="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <ComboBox Grid.Column="0"
-                              ItemsSource="{Binding Profiles}"
-                              SelectedItem="{Binding SelectedProfile}"
-                              DisplayMemberPath="Name" />
-                    <Button Grid.Column="1" Command="{Binding SaveProfileCommand}" Padding="8,4">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE74E;" />
-                            <TextBlock Text="Save" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Command="{Binding DeleteProfileCommand}" Padding="8,4">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE74D;" />
-                            <TextBlock Text="Delete" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
+        <!-- ═══════════════════════════════════════
+             LEFT SIDEBAR — wizard navigation
+             ═══════════════════════════════════════ -->
+        <Border Background="{StaticResource SidebarBg}"
+                BorderBrush="{StaticResource BorderBrushDark}"
+                BorderThickness="0,0,1,0">
 
-                <!-- Row 1: Server / Database file + Test -->
-                <Label Grid.Row="1" Grid.Column="0" Content="{Binding ServerLabel}" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="SQL Server: server name. SQLite: path to .db file" />
-                <Button Grid.Row="1" Grid.Column="2" Content="Browse..." Command="{Binding BrowseDatabaseFileCommand}"
-                        Padding="8,4" Margin="4,0,0,0"
-                        Visibility="{Binding IsSQLite, Converter={StaticResource BoolToVis}}" />
-                <Label Grid.Row="1" Grid.Column="2" Content="Database:" Margin="12,4,0,0"
-                       Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
-                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}"
-                         Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
-                <Button Grid.Row="1" Grid.Column="4" Command="{Binding TestConnectionCommand}" Padding="8,4">
+            <DockPanel>
+
+                <!-- App branding -->
+                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,16">
+                    <TextBlock Text="DBSubsetter"
+                               FontSize="18" FontWeight="Bold"
+                               Foreground="{StaticResource TextBrush}" Height="27"/>
+                    <TextBlock Text="Extract relational subsets"
+                               FontSize="11"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Top"
+                        Height="1"
+                        Background="{StaticResource BorderBrushDark}"
+                        Margin="16,0,16,16"/>
+
+                <!-- Connection status indicator -->
+                <Border DockPanel.Dock="Bottom" Margin="16,0,16,20">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xEC25;" />
-                        <TextBlock Text="Test Connection" VerticalAlignment="Center" />
+                        <Ellipse Width="10" Height="10" Margin="0,0,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#6B7280"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ConnectionOk}" Value="True">
+                                            <Setter Property="Fill" Value="#22C55E"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding ConnectionStatus}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"/>
                     </StackPanel>
-                </Button>
+                </Border>
 
-                <!-- Row 2: Auth (SQL Server: IntSec + User/Pass; MySQL/Postgres: User/Pass only) -->
-                <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="Integrated Security"
-                          IsChecked="{Binding IntegratedSecurity}"
-                          Visibility="{Binding ShowIntegratedSecurity, Converter={StaticResource BoolToVis}}" />
+                <!-- Step navigation — each row: 4px accent bar + step button -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,8,0">
 
-                <Label Grid.Row="2" Grid.Column="2" Content="User:" Margin="12,4,0,0"
-                       IsEnabled="{Binding UserPasswordEnabled}"
-                       Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}" />
-                <Grid Grid.Row="2" Grid.Column="3" Grid.ColumnSpan="2"
-                      Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding UserPasswordEnabled}" />
-                    <Label Grid.Column="1" Content="Pass:" IsEnabled="{Binding UserPasswordEnabled}" />
-                    <PasswordBox Grid.Column="2" x:Name="PasswordBox"
+                    <!-- Step 1 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Grid.Column="0" RadiusX="2" RadiusY="2">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="1">
+                                            <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <Button Grid.Column="1" Tag="1" Content="Connection"
+                                Command="{Binding GoToStepCommand}" CommandParameter="1">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="1">
+                                            <Setter Property="Background" Value="{StaticResource HoverBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                    <!-- Step 2 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Grid.Column="0" RadiusX="2" RadiusY="2">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="2">
+                                            <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <Button Grid.Column="1" Tag="2" Content="Root Data"
+                                Command="{Binding GoToStepCommand}" CommandParameter="2">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="2">
+                                            <Setter Property="Background" Value="{StaticResource HoverBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                    <!-- Step 3 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Grid.Column="0" RadiusX="2" RadiusY="2">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="3">
+                                            <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <Button Grid.Column="1" Tag="3" Content="Tables"
+                                Command="{Binding GoToStepCommand}" CommandParameter="3">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="3">
+                                            <Setter Property="Background" Value="{StaticResource HoverBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                    <!-- Step 4 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Grid.Column="0" RadiusX="2" RadiusY="2">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="4">
+                                            <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <Button Grid.Column="1" Tag="4" Content="Destination"
+                                Command="{Binding GoToStepCommand}" CommandParameter="4">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="4">
+                                            <Setter Property="Background" Value="{StaticResource HoverBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                    <!-- Step 5 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Grid.Column="0" RadiusX="2" RadiusY="2">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Setter Property="Fill" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="5">
+                                            <Setter Property="Fill" Value="{StaticResource AccentBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <Button Grid.Column="1" Tag="5" Content="Run"
+                                Command="{Binding GoToStepCommand}" CommandParameter="5">
+                            <Button.Style>
+                                <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentStep}" Value="5">
+                                            <Setter Property="Background" Value="{StaticResource HoverBg}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+
+                </StackPanel>
+
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════
+             RIGHT CONTENT PANEL
+             ═══════════════════════════════════════ -->
+        <Grid Grid.Column="1" Margin="28,24,28,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- Step heading -->
+                <RowDefinition Height="*"/>     <!-- Step content -->
+                <RowDefinition Height="Auto"/>  <!-- Nav buttons -->
+            </Grid.RowDefinitions>
+
+            <!-- Step heading -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                <TextBlock Text="{Binding StepTitle}"   Style="{StaticResource SectionTitle}"/>
+                <TextBlock Text="{Binding StepSubtitle}"
+                           FontSize="13"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+
+            <!-- ─────────────────────────────────────
+                 STEP 1  Connection
+                 ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="20"
+                    Visibility="{Binding Step1Visible}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>  <!-- Provider -->
+                            <RowDefinition Height="Auto"/>  <!-- Profile -->
+                            <RowDefinition Height="Auto"/>  <!-- Server -->
+                            <RowDefinition Height="Auto"/>  <!-- Database -->
+                            <RowDefinition Height="Auto"/>  <!-- Integrated Security -->
+                            <RowDefinition Height="Auto"/>  <!-- Username -->
+                            <RowDefinition Height="Auto"/>  <!-- Password -->
+                            <RowDefinition Height="20"/>    <!-- spacer -->
+                            <RowDefinition Height="Auto"/>  <!-- Test button -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Provider -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Provider"
+                                   Style="{StaticResource FieldLabel}"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1"
+                                  Width="160" HorizontalAlignment="Left"
+                                  ItemsSource="{Binding ProviderList}"
+                                  SelectedItem="{Binding Provider}"/>
+
+                        <!-- Profile -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Profile"
+                                   Style="{StaticResource FieldLabel}"/>
+                        <Grid Grid.Row="1" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding Profiles}"
+                                      SelectedItem="{Binding SelectedProfile}"
+                                      DisplayMemberPath="Name"
+                                      Margin="0,3,4,8"/>
+                            <Button Grid.Column="1" Command="{Binding SaveProfileCommand}"
+                                    Padding="10,6" Margin="0,3,4,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE74E;"/>
+                                    <TextBlock Text="Save" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2" Command="{Binding DeleteProfileCommand}"
+                                    Padding="10,6" Margin="0,3,0,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE74D;"/>
+                                    <TextBlock Text="Delete" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- Server / DB file -->
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Text="{Binding ServerLabel}"
+                                   Style="{StaticResource FieldLabel}"/>
+                        <Grid Grid.Row="2" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding Server, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,3,4,8"/>
+                            <Button Grid.Column="1" Content="Browse..."
+                                    Command="{Binding BrowseDatabaseFileCommand}"
+                                    Padding="10,6" Margin="0,3,0,8"
+                                    Visibility="{Binding IsSQLite, Converter={StaticResource BoolToVis}}"/>
+                        </Grid>
+
+                        <!-- Database -->
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Database"
+                                   Style="{StaticResource FieldLabel}"
+                                   Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
+                        <TextBox Grid.Row="3" Grid.Column="1"
+                                 Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
+
+                        <!-- Integrated Security -->
+                        <CheckBox Grid.Row="4" Grid.Column="1"
+                                  Content="Use Integrated Security (Windows Auth)"
+                                  IsChecked="{Binding IntegratedSecurity}"
+                                  Visibility="{Binding ShowIntegratedSecurity, Converter={StaticResource BoolToVis}}"/>
+
+                        <!-- Username -->
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Username"
+                                   Style="{StaticResource FieldLabel}"
+                                   IsEnabled="{Binding UserPasswordEnabled}"
+                                   Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
+                        <TextBox Grid.Row="5" Grid.Column="1"
+                                 Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding UserPasswordEnabled}"
-                                 PasswordChanged="PasswordBox_PasswordChanged" />
-                </Grid>
-            </Grid>
-        </GroupBox>
+                                 Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
 
-        <!-- Configuration Panel -->
-        <GroupBox Grid.Row="1" Header="Configuration" Padding="8" Margin="0,4,0,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="120" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                        <!-- Password -->
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Password"
+                                   Style="{StaticResource FieldLabel}"
+                                   IsEnabled="{Binding UserPasswordEnabled}"
+                                   Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
+                        <PasswordBox Grid.Row="6" Grid.Column="1"
+                                     x:Name="PasswordBox"
+                                     IsEnabled="{Binding UserPasswordEnabled}"
+                                     PasswordChanged="PasswordBox_PasswordChanged"
+                                     Visibility="{Binding ShowServerDatabase, Converter={StaticResource BoolToVis}}"/>
 
-                <Label Grid.Row="0" Grid.Column="0" Content="Root Table:" />
-                <Grid Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2">
+                        <!-- Test Connection -->
+                        <Button Grid.Row="8" Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Command="{Binding TestConnectionCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8" Margin="0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xEC25;"
+                                           Foreground="White" VerticalAlignment="Center"
+                                           FontSize="14" Margin="0,0,8,0"/>
+                                <TextBlock Text="Test Connection" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ─────────────────────────────────────
+                 STEP 2  Root Data
+                 ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="20"
+                    Visibility="{Binding Step2Visible}">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <ComboBox Grid.Column="0" IsEditable="True"
-                              ItemsSource="{Binding Tables}"
-                              SelectedItem="{Binding SelectedTable}"
-                              IsEnabled="{Binding ConnectionOk}" />
-                    <Button Grid.Column="1" Command="{Binding RefreshTablesCommand}" Padding="8,4">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE72C;" />
-                            <TextBlock Text="Refresh" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Command="{Binding OpenBrowserCommand}"
-                            IsEnabled="{Binding ConnectionOk}"
-                            Padding="8,4" Margin="4,0,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8F0;" />
-                            <TextBlock Text="Browse DB..." VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
-                <StackPanel Grid.Row="0" Grid.Column="3" Orientation="Horizontal" Margin="8,0,0,0">
-                    <Label Content="PK Column:" />
-                    <Label Content="{Binding PrimaryKeyColumn}" FontWeight="Bold" />
-                </StackPanel>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- Root Table -->
+                        <RowDefinition Height="Auto"/>   <!-- PK Column -->
+                        <RowDefinition Height="Auto"/>   <!-- PK Value -->
+                        <RowDefinition Height="Auto"/>   <!-- Max Rows -->
+                        <RowDefinition Height="16"/>     <!-- spacer -->
+                        <RowDefinition Height="*"/>      <!-- Sample rows -->
+                    </Grid.RowDefinitions>
 
-                <Label Grid.Row="1" Grid.Column="0" Content="PK Value:" />
-                <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" Text="{Binding RootPkValue, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Type a PK value, or load rows below and select one" />
-                    <Button Grid.Column="1" Command="{Binding LoadRootCandidatesCommand}" Padding="8,4" Margin="8,0,0,0"
-                            ToolTip="Load sample rows from the root table to pick the root entry">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8FD;" />
-                            <TextBlock Text="Load rows..." VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                    <!-- Root Table -->
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Root Table"
+                               Style="{StaticResource FieldLabel}"/>
+                    <Grid Grid.Row="0" Grid.Column="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" IsEditable="True"
+                                  ItemsSource="{Binding Tables}"
+                                  SelectedItem="{Binding SelectedTable}"
+                                  IsEnabled="{Binding ConnectionOk}"
+                                  Margin="0,3,4,8"/>
+                        <Button Grid.Column="1" Command="{Binding RefreshTablesCommand}"
+                                Padding="10,6" Margin="0,3,4,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE72C;"/>
+                                <TextBlock Text="Refresh" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Command="{Binding OpenBrowserCommand}"
+                                IsEnabled="{Binding ConnectionOk}"
+                                Padding="10,6" Margin="0,3,0,8">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8F0;"/>
+                                <TextBlock Text="Browse DB..." VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
 
-                <Label Grid.Row="2" Grid.Column="0" Content="Pick row:" VerticalAlignment="Top" Margin="0,4,0,0" />
-                <ListBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,4,0,0"
-                         ItemsSource="{Binding RootRowCandidates}"
-                         SelectedItem="{Binding SelectedRootRow}"
-                         DisplayMemberPath="Display"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         BorderThickness="1" BorderBrush="LightGray"
-                         ToolTip="Load rows first, then select one to set PK Value above" />
-
-                <Label Grid.Row="3" Grid.Column="0" Content="Max Rows:" />
-                <TextBox Grid.Row="3" Grid.Column="1" Width="80" HorizontalAlignment="Left"
-                         Text="{Binding MaxRowsPerTable, UpdateSourceTrigger=PropertyChanged}" />
-                <StackPanel Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2"
-                            Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <TextBlock Text="Output:" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <RadioButton Content="Export to File" IsChecked="{Binding IsFileMode}"
-                                 VerticalAlignment="Center" Margin="0,0,12,0" />
-                    <RadioButton Content="Copy to Database" IsChecked="{Binding IsDbMode}"
-                                 VerticalAlignment="Center" />
-                </StackPanel>
-
-                <!-- Row 4: Output File — visible in file mode only -->
-                <Label Grid.Row="4" Grid.Column="0" Content="Output File:"
-                       Visibility="{Binding FilePanelVisibility}" />
-                <Grid Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3"
-                      Visibility="{Binding FilePanelVisibility}" Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
-                             Text="{Binding OutputFile, UpdateSourceTrigger=PropertyChanged}" />
-                    <Button Grid.Column="1" Content="Browse..." Margin="4,0,0,0"
-                            Command="{Binding BrowseOutputCommand}" Padding="8,4" />
-                </Grid>
-            </Grid>
-        </GroupBox>
-
-        <!-- Destination Panel — visible in DB mode only -->
-        <GroupBox Grid.Row="2" Header="Destination" Padding="8" Margin="0,4,0,0"
-                  Visibility="{Binding DbPanelVisibility}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <!-- Row 0: Server, Database, Test Connection -->
-                <Label Grid.Row="0" Grid.Column="0" Content="Server:" />
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding DestServer, UpdateSourceTrigger=PropertyChanged}" />
-
-                <Label Grid.Row="0" Grid.Column="2" Content="Database:" Margin="12,4,0,0" />
-                <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding DestDatabase, UpdateSourceTrigger=PropertyChanged}" />
-
-                <Button Grid.Row="0" Grid.Column="4" Command="{Binding TestDestConnectionCommand}" Padding="8,4">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xEC25;" />
-                        <TextBlock Text="Test Connection" VerticalAlignment="Center" />
+                    <!-- PK Column (read-only display) -->
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="PK Column"
+                               Style="{StaticResource FieldLabel}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1"
+                                Orientation="Horizontal" Margin="0,3,0,10">
+                        <Border Background="{StaticResource InputBg}"
+                                BorderBrush="{StaticResource BorderBrushDark}"
+                                BorderThickness="1" CornerRadius="4"
+                                Padding="10,6">
+                            <TextBlock Text="{Binding PrimaryKeyColumn}"
+                                       Foreground="{StaticResource AccentBrush2}"
+                                       FontFamily="Consolas" FontSize="13"/>
+                        </Border>
                     </StackPanel>
-                </Button>
 
-                <!-- Row 1: Auth + Status -->
-                <CheckBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Content="Integrated Security"
-                          IsChecked="{Binding DestIntegratedSecurity}" />
+                    <!-- PK Value -->
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="PK Value"
+                               Style="{StaticResource FieldLabel}"/>
+                    <Grid Grid.Row="2" Grid.Column="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding RootPkValue, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,3,4,8"
+                                 ToolTip="Type a PK value, or load rows below and click one"/>
+                        <Button Grid.Column="1" Command="{Binding LoadRootCandidatesCommand}"
+                                Padding="10,6" Margin="0,3,0,8"
+                                ToolTip="Load sample rows from the root table">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE8FD;"/>
+                                <TextBlock Text="Load rows..." VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
 
-                <Label Grid.Row="1" Grid.Column="2" Content="User:" Margin="12,4,0,0"
-                       IsEnabled="{Binding DestSqlAuthEnabled}" />
-                <Grid Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" Text="{Binding DestUsername, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding DestSqlAuthEnabled}" />
-                    <Label Grid.Column="1" Content="Pass:" IsEnabled="{Binding DestSqlAuthEnabled}" />
-                    <PasswordBox Grid.Column="2" x:Name="DestPasswordBox"
-                                 IsEnabled="{Binding DestSqlAuthEnabled}"
-                                 PasswordChanged="DestPasswordBox_PasswordChanged" />
-                    <Label Grid.Column="3" Content="{Binding DestConnectionStatus}" Foreground="Gray" Margin="8,0,0,0" />
+                    <!-- Max Rows -->
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Max Rows / Table"
+                               Style="{StaticResource FieldLabel}"/>
+                    <TextBox Grid.Row="3" Grid.Column="1"
+                             Width="110" HorizontalAlignment="Left"
+                             Text="{Binding MaxRowsPerTable, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <!-- Sample rows list -->
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Pick Row"
+                               Style="{StaticResource FieldLabel}"
+                               VerticalAlignment="Top" Margin="0,4,0,0"/>
+                    <Border Grid.Row="5" Grid.Column="1"
+                            Background="{StaticResource LogBg}"
+                            BorderBrush="{StaticResource BorderBrushDark}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="6">
+                        <ListBox ItemsSource="{Binding RootRowCandidates}"
+                                 SelectedItem="{Binding SelectedRootRow}"
+                                 DisplayMemberPath="Display"
+                                 FontFamily="Consolas" FontSize="13"
+                                 Foreground="#D1D5DB"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ToolTip="Select a row to use its PK value as root entry"/>
+                    </Border>
+
                 </Grid>
-            </Grid>
-        </GroupBox>
+            </Border>
 
-        <!-- Table Exclusions Panel -->
-        <GroupBox Grid.Row="3" Header="Table Inclusions" Padding="8" Margin="0,4,0,0"
-                  IsEnabled="{Binding ConnectionOk}">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-                    <Button Command="{Binding SelectAllTablesCommand}" Padding="8,2" Margin="0,0,4,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE73E;" />
-                            <TextBlock Text="Select All" VerticalAlignment="Center" />
+            <!-- ─────────────────────────────────────
+                 STEP 3  Tables
+                 ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="20"
+                    Visibility="{Binding Step3Visible}">
+                <DockPanel IsEnabled="{Binding ConnectionOk}">
+
+                    <!-- Toolbar -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,14">
+                        <Button Command="{Binding SelectAllTablesCommand}"
+                                Padding="10,6" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE73E;"/>
+                                <TextBlock Text="Select All" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding DeselectAllTablesCommand}"
+                                Padding="10,6" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE711;"/>
+                                <TextBlock Text="Deselect All" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="Unchecked tables will be skipped entirely."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Table list -->
+                    <Border Background="{StaticResource LogBg}"
+                            BorderBrush="{StaticResource BorderBrushDark}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="8">
+                        <ListBox ItemsSource="{Binding TableSelections}"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsIncluded}"
+                                              Content="{Binding Name}"
+                                              Foreground="#D1D5DB"
+                                              Margin="0,2"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                </DockPanel>
+            </Border>
+
+            <!-- ─────────────────────────────────────
+                 STEP 4  Destination
+                 ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="20"
+                    Visibility="{Binding Step4Visible}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+
+                        <!-- Output mode toggle -->
+                        <TextBlock Text="OUTPUT MODE"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                            <RadioButton Content="Export to SQL File"
+                                         IsChecked="{Binding IsFileMode}"
+                                         Margin="0,0,24,0"/>
+                            <RadioButton Content="Copy to Database"
+                                         IsChecked="{Binding IsDbMode}"/>
                         </StackPanel>
-                    </Button>
-                    <Button Command="{Binding DeselectAllTablesCommand}" Padding="8,2">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE711;" />
-                            <TextBlock Text="Deselect All" VerticalAlignment="Center" />
+
+                        <!-- ── File mode ── -->
+                        <StackPanel Visibility="{Binding FilePanelVisibility}">
+                            <TextBlock Text="Output File"
+                                       Style="{StaticResource FieldLabel}"
+                                       Margin="0,0,0,8"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding OutputFile, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,8,0"/>
+                                <Button Grid.Column="1" Content="Browse..."
+                                        Command="{Binding BrowseOutputCommand}"
+                                        Padding="10,6" Margin="0"/>
+                            </Grid>
                         </StackPanel>
-                    </Button>
-                    <TextBlock VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"
-                               Text="Unchecked tables will be skipped entirely." />
-                </StackPanel>
-                <ListBox ItemsSource="{Binding TableSelections}" Height="150"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         BorderThickness="1" BorderBrush="LightGray">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <CheckBox IsChecked="{Binding IsIncluded}" Content="{Binding Name}" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </DockPanel>
-        </GroupBox>
 
-        <!-- Execution Panel -->
-        <GroupBox Grid.Row="4" Header="Execution" Padding="8" Margin="0,4,0,0">
-            <DockPanel>
-                <!-- Top controls -->
-                <Grid DockPanel.Dock="Top">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" FontWeight="Bold"
-                            Command="{Binding RunSubsetCommand}"
-                            Background="{StaticResource PrimaryBrush}" Foreground="White" Padding="16,6">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="White"
-                                       VerticalAlignment="Center" Margin="0,0,6,0" Text="&#xE768;" />
-                            <TextBlock Text="Run Subset" VerticalAlignment="Center" />
+                        <!-- ── Database mode ── -->
+                        <StackPanel Visibility="{Binding DbPanelVisibility}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>  <!-- Server -->
+                                    <RowDefinition Height="Auto"/>  <!-- Database -->
+                                    <RowDefinition Height="Auto"/>  <!-- Int. Sec. -->
+                                    <RowDefinition Height="Auto"/>  <!-- Username -->
+                                    <RowDefinition Height="Auto"/>  <!-- Password -->
+                                    <RowDefinition Height="20"/>    <!-- spacer -->
+                                    <RowDefinition Height="Auto"/>  <!-- Test button -->
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Server"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                                         Text="{Binding DestServer, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Database"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1"
+                                         Text="{Binding DestDatabase, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <CheckBox Grid.Row="2" Grid.Column="1"
+                                          Content="Use Integrated Security (Windows Auth)"
+                                          IsChecked="{Binding DestIntegratedSecurity}"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Username"
+                                           Style="{StaticResource FieldLabel}"
+                                           IsEnabled="{Binding DestSqlAuthEnabled}"/>
+                                <TextBox Grid.Row="3" Grid.Column="1"
+                                         Text="{Binding DestUsername, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding DestSqlAuthEnabled}"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Password"
+                                           Style="{StaticResource FieldLabel}"
+                                           IsEnabled="{Binding DestSqlAuthEnabled}"/>
+                                <PasswordBox Grid.Row="4" Grid.Column="1"
+                                             x:Name="DestPasswordBox"
+                                             IsEnabled="{Binding DestSqlAuthEnabled}"
+                                             PasswordChanged="DestPasswordBox_PasswordChanged"/>
+
+                                <Button Grid.Row="6" Grid.Column="1"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding TestDestConnectionCommand}"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Padding="16,8" Margin="0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xEC25;"
+                                                   Foreground="White" VerticalAlignment="Center"
+                                                   FontSize="14" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Test Connection" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+
+                            </Grid>
+
+                            <!-- Destination connection status -->
+                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                <Ellipse Width="10" Height="10" Margin="0,0,8,0">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="#6B7280"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DestConnectionOk}" Value="True">
+                                                    <Setter Property="Fill" Value="#22C55E"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Text="{Binding DestConnectionStatus}"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+
                         </StackPanel>
-                    </Button>
-                    <Button Grid.Column="1" Command="{Binding CancelCommand}"
-                            IsEnabled="{Binding IsRunning}" Padding="16,6">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE711;" />
-                            <TextBlock Text="Cancel" VerticalAlignment="Center" />
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ─────────────────────────────────────
+                 STEP 5  Run
+                 ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBg}"
+                    BorderBrush="{StaticResource BorderBrushDark}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="20"
+                    Visibility="{Binding Step5Visible}">
+                <DockPanel>
+
+                    <!-- Action bar -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Command="{Binding RunSubsetCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                Padding="16,8" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE768;"
+                                           Foreground="White" VerticalAlignment="Center"
+                                           FontSize="14" Margin="0,0,8,0"/>
+                                <TextBlock Text="Run Subset" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="1"
+                                Command="{Binding CancelCommand}"
+                                IsEnabled="{Binding IsRunning}"
+                                Padding="14,8" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource ButtonIcon}" Text="&#xE711;"/>
+                                <TextBlock Text="Cancel" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Elapsed -->
+                        <StackPanel Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,20,0">
+                            <TextBlock Text="Elapsed: "
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="12"/>
+                            <TextBlock Text="{Binding ElapsedTime, Mode=OneWay}"
+                                       Foreground="{StaticResource TextBrush}"
+                                       FontWeight="Bold" FontSize="12"/>
                         </StackPanel>
-                    </Button>
-                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0"
-                               Text="{Binding ConnectionStatus}" Foreground="Gray" />
-                </Grid>
 
-                <!-- Progress bar -->
-                <ProgressBar DockPanel.Dock="Top" Height="20" Margin="0,8,0,4"
-                             Value="{Binding ProgressValue}"
-                             IsIndeterminate="{Binding IsProgressIndeterminate}" />
+                        <!-- Row count -->
+                        <StackPanel Grid.Column="4"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Rows: "
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="12"/>
+                            <TextBlock Text="{Binding TotalInserts, Mode=OneWay, StringFormat=N0}"
+                                       Foreground="{StaticResource TextBrush}"
+                                       FontWeight="Bold" FontSize="12"/>
+                        </StackPanel>
+                    </Grid>
 
-                <!-- Log view -->
-                <ListBox x:Name="LogListBox"
-                         ItemsSource="{Binding LogEntries}"
-                         FontFamily="Consolas" FontSize="12"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         BorderThickness="1" BorderBrush="LightGray" />
-            </DockPanel>
-        </GroupBox>
+                    <!-- Progress bar -->
+                    <ProgressBar DockPanel.Dock="Top"
+                                 Height="18" Margin="0,0,0,10"
+                                 Value="{Binding ProgressValue}"
+                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
+                                 Background="#2A2A3C"
+                                 Foreground="#4F46E5"
+                                 BorderBrush="{StaticResource BorderBrushDark}"/>
 
-        <!-- Status bar -->
-        <StatusBar Grid.Row="5" Margin="0,4,0,0">
-            <StatusBarItem>
-                <TextBlock>
-                    <Run Text="Elapsed: " />
-                    <Run Text="{Binding ElapsedTime, Mode=OneWay}" FontWeight="Bold" />
-                </TextBlock>
-            </StatusBarItem>
-            <Separator />
-            <StatusBarItem>
-                <TextBlock>
-                    <Run Text="Rows: " />
-                    <Run Text="{Binding TotalInserts, Mode=OneWay, StringFormat=N0}" FontWeight="Bold" />
-                </TextBlock>
-            </StatusBarItem>
-            <Separator />
-            <StatusBarItem>
-                <TextBlock>
-                    <Run Text="Current: " />
-                    <Run Text="{Binding CurrentTable, Mode=OneWay}" FontWeight="Bold" />
-                </TextBlock>
-            </StatusBarItem>
-        </StatusBar>
+                    <!-- Current table ticker -->
+                    <StackPanel DockPanel.Dock="Top"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,12">
+                        <TextBlock Text="Processing: "
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="12"/>
+                        <TextBlock Text="{Binding CurrentTable, Mode=OneWay}"
+                                   Foreground="{StaticResource AccentBrush2}"
+                                   FontFamily="Consolas" FontSize="12"/>
+                    </StackPanel>
+
+                    <!-- Log output -->
+                    <Border Background="{StaticResource LogBg}"
+                            BorderBrush="{StaticResource BorderBrushDark}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="10">
+                        <ListBox x:Name="LogListBox"
+                                 ItemsSource="{Binding LogEntries}"
+                                 FontFamily="Consolas" FontSize="13"
+                                 Foreground="#D1D5DB"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                    </Border>
+
+                </DockPanel>
+            </Border>
+
+            <!-- ─────────────────────────────────────
+                 Bottom navigation buttons
+                 ───────────────────────────────────── -->
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,14,0,0">
+
+                <Button Content="&#x2190;  Back"
+                        Command="{Binding PreviousStepCommand}"
+                        Padding="14,8" Margin="0,0,8,0"/>
+
+                <Button Content="Next  &#x2192;"
+                        Command="{Binding NextStepCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Padding="14,8" Margin="0"
+                        Visibility="{Binding CanGoNext, Converter={StaticResource BoolToVis}}"/>
+
+            </StackPanel>
+
+        </Grid>
     </Grid>
 </Window>

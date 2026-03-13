@@ -3,46 +3,170 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <!-- Icon and color scheme: green primary (#4CAF50), muted blue-gray for secondary icons -->
-        <!-- Fallback to Segoe UI Symbol if MDL2 Assets not available (e.g. older Windows) -->
-        <FontFamily x:Key="IconFont">Segoe MDL2 Assets, Segoe UI Symbol</FontFamily>
-        <SolidColorBrush x:Key="PrimaryBrush" Color="#4CAF50" />
-        <SolidColorBrush x:Key="IconBrush" Color="#546E7A" />
-        <SolidColorBrush x:Key="IconBrushLight" Color="#78909C" />
 
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Icon font -->
+        <FontFamily x:Key="IconFont">Segoe MDL2 Assets, Segoe UI Symbol</FontFamily>
+
+        <!-- Color palette — from Styles.xaml reference -->
+        <Color x:Key="WindowBgTopColor"  >#2A2A4A</Color>
+        <Color x:Key="WindowBgBotColor"  >#1E1E2E</Color>
+        <SolidColorBrush x:Key="WindowBg"        Color="#1E1E2E"/>
+        <SolidColorBrush x:Key="PanelBg"         Color="#2A2A3C"/>
+        <SolidColorBrush x:Key="SidebarBg"       Color="#232336"/>
+        <SolidColorBrush x:Key="InputBg"         Color="#1A1A2E"/>
+        <SolidColorBrush x:Key="LogBg"           Color="#181825"/>
+        <SolidColorBrush x:Key="BorderBrushDark" Color="#3F3F55"/>
+        <SolidColorBrush x:Key="AccentBrush"     Color="#4F46E5"/>
+        <SolidColorBrush x:Key="AccentBrush2"    Color="#06B6D4"/>
+        <SolidColorBrush x:Key="TextBrush"       Color="#E4E4F0"/>
+        <SolidColorBrush x:Key="MutedTextBrush"  Color="#9CA3AF"/>
+        <SolidColorBrush x:Key="HoverBg"         Color="#2F2F44"/>
+
+        <!-- Kept for engine code that references PrimaryBrush -->
+        <SolidColorBrush x:Key="PrimaryBrush"    Color="#4F46E5"/>
+        <SolidColorBrush x:Key="IconBrush"       Color="#9CA3AF"/>
+        <SolidColorBrush x:Key="IconBrushLight"  Color="#B0B8C4"/>
+
+        <!-- Button icon glyph — dark so it's visible on light button chrome -->
         <Style x:Key="ButtonIcon" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="Foreground" Value="{StaticResource IconBrush}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="FontFamily"        Value="{StaticResource IconFont}"/>
+            <Setter Property="FontSize"          Value="14"/>
+            <Setter Property="Foreground"        Value="#374151"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"            Value="0,0,6,0"/>
         </Style>
+
+        <!-- Field label inside forms -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground"        Value="{StaticResource TextBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize"          Value="13"/>
+        </Style>
+
+        <!-- Section title — FontSize/Weight from Styles.xaml reference -->
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="18"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush2}"/>
+            <Setter Property="Margin"     Value="0,0,0,16"/>
+        </Style>
+
+        <!-- No implicit TextBlock style — let button/panel content inherit
+             Foreground from their parent so dark buttons get dark text and
+             light panel labels keep their explicit Foreground colours. -->
+
+        <Style TargetType="Label">
+            <Setter Property="Foreground"        Value="{StaticResource TextBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding"           Value="0"/>
+            <Setter Property="Margin"            Value="0,0,0,0"/>
+        </Style>
+
+        <!-- Dark text so it's readable on the light Windows-chrome backgrounds
+             that WPF renders for Button, TextBox and ComboBox by default -->
+        <SolidColorBrush x:Key="ControlTextDark" Color="#111827"/>
 
         <Style TargetType="Button">
-            <Setter Property="Padding" Value="12,6" />
-            <Setter Property="Margin" Value="4" />
+            <Setter Property="Foreground"      Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="Padding"         Value="12,6"/>
+            <Setter Property="Margin"          Value="4"/>
+            <Setter Property="Cursor"          Value="Hand"/>
         </Style>
+
         <Style TargetType="TextBox">
-            <Setter Property="Margin" Value="4" />
-            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Foreground"      Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="Margin"          Value="0,3,0,8"/>
         </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="Foreground"      Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="Margin"          Value="0,3,0,8"/>
+        </Style>
+
         <Style TargetType="ComboBox">
-            <Setter Property="Margin" Value="4" />
-            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Foreground"      Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="Padding"         Value="8,4"/>
+            <Setter Property="Margin"          Value="0,3,0,8"/>
         </Style>
-        <Style TargetType="Label">
-            <Setter Property="Margin" Value="4,4,0,0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
+
         <Style TargetType="CheckBox">
-            <Setter Property="Margin" Value="4" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground"        Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"            Value="0,3,0,8"/>
         </Style>
-        <Style TargetType="GroupBox">
-            <Setter Property="BorderBrush" Value="#E0E0E0" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8" />
+
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground"        Value="{StaticResource ControlTextDark}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin"            Value="0,3,0,8"/>
         </Style>
+
+        <Style TargetType="ListBox">
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Foreground"       Value="{StaticResource ControlTextDark}"/>
+        </Style>
+
+        <!-- Primary action button -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background"      Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"         Value="16,8"/>
+            <Setter Property="Margin"          Value="4"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+        </Style>
+
+        <!-- Wizard step button — template from Styles.xaml reference,
+             with Background binding added so hover/active triggers work -->
+        <Style x:Key="WizardStepButton" TargetType="Button">
+            <Setter Property="Background"                 Value="Transparent"/>
+            <Setter Property="BorderThickness"            Value="0"/>
+            <Setter Property="Padding"                    Value="8"/>
+            <Setter Property="Margin"                     Value="0,2"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor"                     Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="8">
+                            <StackPanel Orientation="Horizontal">
+
+                                <Grid Width="28" Height="28" Margin="0,0,10,0">
+                                    <Ellipse Fill="#3A3A52"
+                                             Stroke="#4F46E5"
+                                             StrokeThickness="2"/>
+                                    <TextBlock Text="{TemplateBinding Tag}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="White"
+                                               FontWeight="Bold"/>
+                                </Grid>
+
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextBrush}"
+                                           FontSize="14"/>
+
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2F2F44"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>
