@@ -35,14 +35,18 @@
             <DockPanel>
 
                 <!-- App branding -->
-                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,16">
-                    <TextBlock Text="DBSubsetter"
-                               FontSize="18" FontWeight="Bold"
-                               Foreground="{StaticResource TextBrush}" Height="27"/>
-                    <TextBlock Text="Extract relational subsets"
-                               FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               Margin="0,4,0,0"/>
+                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,16" Orientation="Horizontal">
+                    <Image Source="pack://application:,,,/DbSubsetter.UI;component/Icons/dbsubsetter_icon.png"
+                           Width="32" Height="32" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <StackPanel>
+                        <TextBlock Text="DBSubsetter"
+                                   FontSize="18" FontWeight="Bold"
+                                   Foreground="{StaticResource TextBrush}" Height="27"/>
+                        <TextBlock Text="Extract relational subsets"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
                 </StackPanel>
 
                 <Border DockPanel.Dock="Top"
@@ -94,7 +98,8 @@
                             </Rectangle.Style>
                         </Rectangle>
                         <Button Grid.Column="1" Tag="1" Content="Connection"
-                                Command="{Binding GoToStepCommand}" CommandParameter="1">
+                                Command="{Binding GoToStepCommand}" CommandParameter="1"
+                                IsEnabled="True">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
                                     <Style.Triggers>
@@ -126,7 +131,8 @@
                             </Rectangle.Style>
                         </Rectangle>
                         <Button Grid.Column="1" Tag="2" Content="Root Data"
-                                Command="{Binding GoToStepCommand}" CommandParameter="2">
+                                Command="{Binding GoToStepCommand}" CommandParameter="2"
+                                IsEnabled="{Binding Step2Enabled}">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
                                     <Style.Triggers>
@@ -158,7 +164,8 @@
                             </Rectangle.Style>
                         </Rectangle>
                         <Button Grid.Column="1" Tag="3" Content="Tables"
-                                Command="{Binding GoToStepCommand}" CommandParameter="3">
+                                Command="{Binding GoToStepCommand}" CommandParameter="3"
+                                IsEnabled="{Binding Step3Enabled}">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
                                     <Style.Triggers>
@@ -190,7 +197,8 @@
                             </Rectangle.Style>
                         </Rectangle>
                         <Button Grid.Column="1" Tag="4" Content="Destination"
-                                Command="{Binding GoToStepCommand}" CommandParameter="4">
+                                Command="{Binding GoToStepCommand}" CommandParameter="4"
+                                IsEnabled="{Binding Step4Enabled}">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
                                     <Style.Triggers>
@@ -222,7 +230,8 @@
                             </Rectangle.Style>
                         </Rectangle>
                         <Button Grid.Column="1" Tag="5" Content="Run"
-                                Command="{Binding GoToStepCommand}" CommandParameter="5">
+                                Command="{Binding GoToStepCommand}" CommandParameter="5"
+                                IsEnabled="{Binding Step5Enabled}">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource WizardStepButton}" TargetType="Button">
                                     <Style.Triggers>
@@ -818,7 +827,8 @@
 
                 <Button Content="&#x2190;  Back"
                         Command="{Binding PreviousStepCommand}"
-                        Padding="14,8" Margin="0,0,8,0"/>
+                        Padding="14,8" Margin="0,0,8,0"
+                        Visibility="{Binding CanGoBack, Converter={StaticResource BoolToVis}}"/>
 
                 <Button Content="Next  &#x2192;"
                         Command="{Binding NextStepCommand}"

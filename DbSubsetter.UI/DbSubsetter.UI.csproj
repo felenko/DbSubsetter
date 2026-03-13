@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Icons\dbsubsetter_icon.ico" />
+    <Content Include="Icons\dbsubsetter_icon.ico.back" />
   </ItemGroup>
 
   <ItemGroup>

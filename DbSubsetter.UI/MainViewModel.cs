@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -45,9 +46,9 @@ public class MainViewModel : INotifyPropertyChanged
 
         GoToStepCommand = new RelayCommand(param =>
         {
-            if (int.TryParse(param?.ToString(), out int step))
+            if (int.TryParse(param?.ToString(), out int step) && CanGoToStep(step))
                 CurrentStep = step;
-        });
+        }, param => int.TryParse(param?.ToString(), out int s) && CanGoToStep(s));
         NextStepCommand = new RelayCommand(() => CurrentStep++, () => CanGoNext);
         PreviousStepCommand = new RelayCommand(() => CurrentStep--, () => CanGoBack);
 
@@ -139,7 +140,7 @@ public class MainViewModel : INotifyPropertyChanged
     public bool ConnectionOk
     {
         get => _connectionOk;
-        set { _connectionOk = value; OnPropertyChanged(); }
+        set { _connectionOk = value; OnPropertyChanged(); NotifyStepCompletion(); }
     }
 
     // Destination connection
@@ -191,7 +192,7 @@ public class MainViewModel : INotifyPropertyChanged
     public bool DestConnectionOk
     {
         get => _destConnectionOk;
-        set { _destConnectionOk = value; OnPropertyChanged(); }
+        set { _destConnectionOk = value; OnPropertyChanged(); NotifyStepCompletion(); }
     }
 
     // Output mode
@@ -219,6 +220,7 @@ public class MainViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsFileMode));
             OnPropertyChanged(nameof(FilePanelVisibility));
             OnPropertyChanged(nameof(DbPanelVisibility));
+            NotifyStepCompletion();
         }
     }
 
@@ -229,7 +231,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string OutputFile
     {
         get => _outputFile;
-        set { _outputFile = value; OnPropertyChanged(); }
+        set { _outputFile = value; OnPropertyChanged(); NotifyStepCompletion(); }
     }
 
     // Profiles
@@ -267,6 +269,7 @@ public class MainViewModel : INotifyPropertyChanged
         {
             _selectedTable = value;
             OnPropertyChanged();
+            NotifyStepCompletion();
             if (value is not null)
                 _ = LoadPrimaryKeyAsync(value);
         }
@@ -283,7 +286,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string RootPkValue
     {
         get => _rootPkValue;
-        set { _rootPkValue = value; OnPropertyChanged(); }
+        set { _rootPkValue = value; OnPropertyChanged(); NotifyStepCompletion(); }
     }
 
     /// <summary>Sample rows from the root table for choosing the root entry (PK value).</summary>
@@ -470,7 +473,9 @@ public class MainViewModel : INotifyPropertyChanged
             foreach (var t in tables)
             {
                 Tables.Add(t);
-                TableSelections.Add(new TableSelection { Name = t, IsIncluded = true });
+                var ts = new TableSelection { Name = t, IsIncluded = true };
+                ts.PropertyChanged += (_, _) => NotifyStepCompletion();
+                TableSelections.Add(ts);
             }
             AddLog($"Loaded {tables.Count} tables");
         }
@@ -704,6 +709,21 @@ public class MainViewModel : INotifyPropertyChanged
         LogEntries.Add(entry);
     }
 
+    private void NotifyStepCompletion()
+    {
+        OnPropertyChanged(nameof(Step1Completed));
+        OnPropertyChanged(nameof(Step2Completed));
+        OnPropertyChanged(nameof(Step3Completed));
+        OnPropertyChanged(nameof(Step4Completed));
+        OnPropertyChanged(nameof(Step2Enabled));
+        OnPropertyChanged(nameof(Step3Enabled));
+        OnPropertyChanged(nameof(Step4Enabled));
+        OnPropertyChanged(nameof(Step5Enabled));
+        OnPropertyChanged(nameof(HighestCompletedStep));
+        OnPropertyChanged(nameof(CanGoNext));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     // ── Wizard navigation ────────────────────────────────────────────────
 
     private int _currentStep = 1;
@@ -754,7 +774,52 @@ public class MainViewModel : INotifyPropertyChanged
     public Visibility Step5Visible => CurrentStep == 5 ? Visibility.Visible : Visibility.Collapsed;
 
     public bool CanGoBack => CurrentStep > 1;
-    public bool CanGoNext => CurrentStep < 5;
+
+    /// <summary>True when the current step is completed so the user can proceed to Next.</summary>
+    public bool CanGoNext => CurrentStep < 5 && IsStepCompleted(CurrentStep);
+
+    /// <summary>Step N can be navigated to only if all previous steps are completed.</summary>
+    public bool CanGoToStep(int step) => step switch
+    {
+        1 => true,
+        2 => Step1Completed,
+        3 => Step2Completed,
+        4 => Step3Completed,
+        5 => Step4Completed,
+        _ => false
+    };
+
+    public bool Step1Enabled => true;
+    public bool Step2Enabled => Step1Completed;
+    public bool Step3Enabled => Step2Completed;
+    public bool Step4Enabled => Step3Completed;
+    public bool Step5Enabled => Step4Completed;
+
+    private bool IsStepCompleted(int step) => step switch
+    {
+        1 => Step1Completed,
+        2 => Step2Completed,
+        3 => Step3Completed,
+        4 => Step4Completed,
+        _ => false
+    };
+
+    public bool Step1Completed => ConnectionOk;
+
+    public bool Step2Completed =>
+        !string.IsNullOrWhiteSpace(SelectedTable) &&
+        !string.IsNullOrWhiteSpace(RootPkValue);
+
+    public bool Step3Completed => TableSelections.Any(ts => ts.IsIncluded);
+
+    public bool Step4Completed =>
+        IsFileMode
+            ? !string.IsNullOrWhiteSpace(OutputFile)
+            : DestConnectionOk;
+
+    /// <summary>Highest completed step index (1–4). Used for green circle on completed steps.</summary>
+    public int HighestCompletedStep =>
+        Step4Completed ? 4 : Step3Completed ? 3 : Step2Completed ? 2 : Step1Completed ? 1 : 0;
 
     // ─────────────────────────────────────────────────────────────────────
 
