@@ -30,6 +30,14 @@ public class MainViewModel : INotifyPropertyChanged
                 ElapsedTime = _stopwatch.Elapsed.ToString(@"mm\:ss");
         };
 
+        NewProjectCommand = new RelayCommand(NewProject);
+        OpenProjectCommand = new RelayCommand(OpenProject);
+        SaveProjectCommand = new RelayCommand(SaveProject);
+        SaveAsProjectCommand = new RelayCommand(SaveProjectAs);
+        OpenRecentProjectCommand = new RelayCommand(path => OpenProjectFromPath(path?.ToString()));
+
+        RecentProjects = new ObservableCollection<string>(SubsetProjectManager.LoadRecentProjects());
+
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsRunning);
         TestDestConnectionCommand = new AsyncRelayCommand(TestDestConnectionAsync, () => !IsRunning);
         BrowseOutputCommand = new RelayCommand(BrowseOutput);
@@ -377,6 +385,58 @@ public class MainViewModel : INotifyPropertyChanged
     public ICommand NextStepCommand { get; }
     public ICommand PreviousStepCommand { get; }
 
+    // Project commands
+    public ICommand NewProjectCommand { get; }
+    public ICommand OpenProjectCommand { get; }
+    public ICommand SaveProjectCommand { get; }
+    public ICommand SaveAsProjectCommand { get; }
+    public ICommand OpenRecentProjectCommand { get; }
+
+    // Project state
+    public ObservableCollection<string> RecentProjects { get; }
+
+    private string? _currentProjectPath;
+    public string? CurrentProjectPath
+    {
+        get => _currentProjectPath;
+        set
+        {
+            _currentProjectPath = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+    }
+
+    private bool _isDirty;
+    public bool IsDirty
+    {
+        get => _isDirty;
+        set
+        {
+            _isDirty = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+    }
+
+    public string WindowTitle
+    {
+        get
+        {
+            var name = CurrentProjectPath is not null
+                ? Path.GetFileNameWithoutExtension(CurrentProjectPath)
+                : "Untitled";
+            return $"DBSubsetter — {name}{(IsDirty ? " *" : "")}";
+        }
+    }
+
+    private int _browserRowLimit = 100;
+    public int BrowserRowLimit
+    {
+        get => _browserRowLimit;
+        set { _browserRowLimit = Math.Max(1, value); OnPropertyChanged(); }
+    }
+
     private void OpenBrowser()
     {
         var win = new BrowseWindow(Provider, BuildConnectionString(), (table, pkVal) =>
@@ -384,8 +444,9 @@ public class MainViewModel : INotifyPropertyChanged
             SelectedTable = table;
             RootPkValue = pkVal;
             AddLog($"Browser: selected {table} PK={pkVal}");
-        });
+        }, TableSelections, BrowserRowLimit);
         win.Owner = Application.Current.MainWindow;
+        win.Closed += (_, _) => BrowserRowLimit = win.CurrentRowLimit;
         win.Show();
     }
 
@@ -474,7 +535,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 Tables.Add(t);
                 var ts = new TableSelection { Name = t, IsIncluded = true };
-                ts.PropertyChanged += (_, _) => NotifyStepCompletion();
+                ts.PropertyChanged += (_, _) => { NotifyStepCompletion(); IsDirty = true; };
                 TableSelections.Add(ts);
             }
             AddLog($"Loaded {tables.Count} tables");
@@ -579,11 +640,15 @@ public class MainViewModel : INotifyPropertyChanged
                 .Select(ts => ts.Name)
                 .ToList();
 
+            var tableFilters = TableSelections
+                .Where(ts => !string.IsNullOrWhiteSpace(ts.WhereClause))
+                .ToDictionary(ts => ts.Name, ts => ts.WhereClause);
+
             if (IsSQLite)
             {
                 var engineSqlite = new SubsetEngineSqlite(
                     BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
-                    MaxRowsPerTable, progress, excludedTables);
+                    MaxRowsPerTable, progress, excludedTables, tableFilters);
                 await Task.Run(() => engineSqlite.RunAsync(_cts.Token));
                 TotalInserts = engineSqlite.TotalOut;
                 AddLog($"Complete! {engineSqlite.TotalOut:N0} INSERTs written to {OutputFile}");
@@ -592,7 +657,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 var engineMySql = new SubsetEngineMySql(
                     BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
-                    MaxRowsPerTable, progress, excludedTables);
+                    MaxRowsPerTable, progress, excludedTables, tableFilters);
                 await Task.Run(() => engineMySql.RunAsync(_cts.Token));
                 TotalInserts = engineMySql.TotalOut;
                 AddLog($"Complete! {engineMySql.TotalOut:N0} INSERTs written to {OutputFile}");
@@ -601,7 +666,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 var enginePostgres = new SubsetEnginePostgres(
                     BuildConnectionString(), SelectedTable!, RootPkValue, OutputFile!,
-                    MaxRowsPerTable, progress, excludedTables);
+                    MaxRowsPerTable, progress, excludedTables, tableFilters);
                 await Task.Run(() => enginePostgres.RunAsync(_cts.Token));
                 TotalInserts = enginePostgres.TotalOut;
                 AddLog($"Complete! {enginePostgres.TotalOut:N0} INSERTs written to {OutputFile}");
@@ -616,7 +681,8 @@ public class MainViewModel : INotifyPropertyChanged
                     outFile: IsFileMode ? OutputFile : null,
                     MaxRowsPerTable,
                     progress,
-                    excludedTables);
+                    excludedTables,
+                    tableFilters);
                 await Task.Run(() => engine.RunAsync(_cts.Token));
                 TotalInserts = engine.TotalOut;
                 if (IsFileMode)
@@ -649,6 +715,236 @@ public class MainViewModel : INotifyPropertyChanged
     {
         _cts?.Cancel();
         AddLog("Cancellation requested...");
+    }
+
+    // ── Project save / load ──────────────────────────────────────────────────
+
+    private void NewProject()
+    {
+        if (!PromptSaveIfDirty()) return;
+        ResetProjectState();
+        CurrentProjectPath = null;
+        IsDirty = false;
+        AddLog("New project created.");
+    }
+
+    private void OpenProject()
+    {
+        if (!PromptSaveIfDirty()) return;
+        var dlg = new OpenFileDialog
+        {
+            Filter = "DBSubsetter Project (*.dbsubset)|*.dbsubset|All Files (*.*)|*.*",
+            DefaultExt = ".dbsubset",
+            Title = "Open Project"
+        };
+        if (dlg.ShowDialog() != true) return;
+        OpenProjectFromPath(dlg.FileName);
+    }
+
+    private void OpenProjectFromPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            AddLog($"Project file not found: {path}");
+            return;
+        }
+        try
+        {
+            var project = SubsetProjectManager.Load(path);
+            LoadFromProject(project);
+            CurrentProjectPath = path;
+            IsDirty = false;
+            SubsetProjectManager.AddRecentProject(path, RecentProjects.ToList());
+            // Refresh observable collection
+            var updated = SubsetProjectManager.LoadRecentProjects();
+            RecentProjects.Clear();
+            foreach (var r in updated) RecentProjects.Add(r);
+            AddLog($"Project loaded: {path}");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Failed to load project: {ex.Message}");
+        }
+    }
+
+    private void SaveProject()
+    {
+        if (CurrentProjectPath is null)
+            SaveProjectAs();
+        else
+            SaveProjectToPath(CurrentProjectPath);
+    }
+
+    private void SaveProjectAs()
+    {
+        var dlg = new SaveFileDialog
+        {
+            Filter = "DBSubsetter Project (*.dbsubset)|*.dbsubset|All Files (*.*)|*.*",
+            DefaultExt = ".dbsubset",
+            FileName = CurrentProjectPath is not null
+                ? Path.GetFileName(CurrentProjectPath)
+                : "MySubset.dbsubset",
+            Title = "Save Project As"
+        };
+        if (dlg.ShowDialog() != true) return;
+        SaveProjectToPath(dlg.FileName);
+    }
+
+    private void SaveProjectToPath(string path)
+    {
+        try
+        {
+            var project = CaptureToProject();
+            SubsetProjectManager.Save(project, path);
+            CurrentProjectPath = path;
+            IsDirty = false;
+            SubsetProjectManager.AddRecentProject(path, RecentProjects.ToList());
+            var updated = SubsetProjectManager.LoadRecentProjects();
+            RecentProjects.Clear();
+            foreach (var r in updated) RecentProjects.Add(r);
+            AddLog($"Project saved: {path}");
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Failed to save project: {ex.Message}");
+        }
+    }
+
+    private SubsetProject CaptureToProject()
+    {
+        return new SubsetProject
+        {
+            SourceProvider = Provider,
+            SourceServer = Server,
+            SourceDatabase = Database,
+            SourceIntegratedSecurity = IntegratedSecurity,
+            SourceUsername = Username,
+
+            RootTable = SelectedTable,
+            RootPkValue = RootPkValue,
+            MaxRowsPerTable = MaxRowsPerTable,
+            BrowserRowLimit = BrowserRowLimit,
+
+            TableRules = TableSelections.Select(ts => new TableRule
+            {
+                Name = ts.Name,
+                IsIncluded = ts.IsIncluded,
+                WhereClause = ts.WhereClause
+            }).ToList(),
+
+            IsFileMode = IsFileMode,
+            OutputFile = OutputFile,
+            DestServer = DestServer,
+            DestDatabase = DestDatabase,
+            DestIntegratedSecurity = DestIntegratedSecurity,
+            DestUsername = DestUsername,
+        };
+    }
+
+    private void LoadFromProject(SubsetProject p)
+    {
+        Provider = p.SourceProvider;
+        Server = p.SourceServer;
+        Database = p.SourceDatabase;
+        IntegratedSecurity = p.SourceIntegratedSecurity;
+        Username = p.SourceUsername;
+
+        MaxRowsPerTable = p.MaxRowsPerTable;
+        BrowserRowLimit = p.BrowserRowLimit;
+
+        IsFileMode = p.IsFileMode;
+        OutputFile = p.OutputFile ?? "subset.sql";
+        DestServer = p.DestServer;
+        DestDatabase = p.DestDatabase;
+        DestIntegratedSecurity = p.DestIntegratedSecurity;
+        DestUsername = p.DestUsername;
+
+        // Restore table rules — merge with any existing entries
+        TableSelections.Clear();
+        foreach (var rule in p.TableRules)
+        {
+            var ts = new TableSelection
+            {
+                Name = rule.Name,
+                IsIncluded = rule.IsIncluded,
+                WhereClause = rule.WhereClause
+            };
+            ts.PropertyChanged += (_, _) => { NotifyStepCompletion(); IsDirty = true; };
+            TableSelections.Add(ts);
+            // Keep Tables list in sync
+            if (!Tables.Contains(rule.Name))
+                Tables.Add(rule.Name);
+        }
+
+        // Root — set after tables so SelectedTable can match
+        _selectedTable = p.RootTable;
+        OnPropertyChanged(nameof(SelectedTable));
+        RootPkValue = p.RootPkValue ?? string.Empty;
+
+        // If the project has connection info, treat Step 1 as provisionally complete so
+        // all downstream steps that have enough data are immediately navigable.
+        // The user can hit "Test Connection" to confirm before running.
+        bool hasSourceConn = !string.IsNullOrWhiteSpace(p.SourceServer);
+        _connectionOk = hasSourceConn;
+        ConnectionStatus = hasSourceConn ? "Loaded from project — click Test Connection to verify." : string.Empty;
+        OnPropertyChanged(nameof(ConnectionOk));
+
+        // Same for destination DB mode: if dest server is stored, treat as provisionally ok.
+        bool hasDestConn = !p.IsFileMode && !string.IsNullOrWhiteSpace(p.DestServer);
+        _destConnectionOk = hasDestConn;
+        DestConnectionStatus = hasDestConn ? "Loaded from project — click Test Connection to verify." : string.Empty;
+        OnPropertyChanged(nameof(DestConnectionOk));
+
+        NotifyStepCompletion();
+    }
+
+    private void ResetProjectState()
+    {
+        Provider = DatabaseProvider.SqlServer;
+        Server = string.Empty;
+        Database = string.Empty;
+        IntegratedSecurity = true;
+        Username = string.Empty;
+        Password = string.Empty;
+        ConnectionOk = false;
+        ConnectionStatus = string.Empty;
+
+        SelectedTable = null;
+        RootPkValue = string.Empty;
+        PrimaryKeyColumn = string.Empty;
+        RootRowCandidates.Clear();
+
+        Tables.Clear();
+        TableSelections.Clear();
+
+        MaxRowsPerTable = 1000;
+        BrowserRowLimit = 100;
+
+        IsFileMode = true;
+        OutputFile = "subset.sql";
+        DestServer = string.Empty;
+        DestDatabase = string.Empty;
+        DestConnectionOk = false;
+        DestConnectionStatus = string.Empty;
+
+        LogEntries.Clear();
+        CurrentStep = 1;
+    }
+
+    private bool PromptSaveIfDirty()
+    {
+        if (!IsDirty) return true;
+        var result = MessageBox.Show(
+            "You have unsaved changes. Save before continuing?",
+            "Unsaved Changes",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+        if (result == MessageBoxResult.Yes)
+        {
+            SaveProject();
+            return true;
+        }
+        return result == MessageBoxResult.No;
     }
 
     private void SaveProfile()
@@ -711,6 +1007,7 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void NotifyStepCompletion()
     {
+        IsDirty = true;
         OnPropertyChanged(nameof(Step1Completed));
         OnPropertyChanged(nameof(Step2Completed));
         OnPropertyChanged(nameof(Step3Completed));

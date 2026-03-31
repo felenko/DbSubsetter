@@ -112,6 +112,17 @@ public class SchemaExplorerPostgres : ISchemaExplorer
         return string.Join(".", parts.Select(p => "\"" + p.Replace("\"", "\"\"") + "\""));
     }
 
+    public async Task<DataTable> ExecuteQueryAsync(string connectionString, string sql, CancellationToken ct = default)
+    {
+        await using var cn = new NpgsqlConnection(connectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, cn) { CommandTimeout = 30 };
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        var dt = new DataTable();
+        await Task.Run(() => dt.Load(rdr), ct);
+        return dt;
+    }
+
     static (string? schema, string name) ParseTable(string table)
     {
         var parts = table.Replace("\"", "").Split('.');

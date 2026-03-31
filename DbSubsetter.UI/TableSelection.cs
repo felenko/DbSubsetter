@@ -19,6 +19,13 @@ public class TableSelection : INotifyPropertyChanged
         set { _isIncluded = value; OnPropertyChanged(); }
     }
 
+    private string _whereClause = string.Empty;
+    public string WhereClause
+    {
+        get => _whereClause;
+        set { _whereClause = value; OnPropertyChanged(); }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

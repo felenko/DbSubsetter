@@ -10,4 +10,5 @@ public interface ISchemaExplorer
     Task<List<RootRowCandidate>> GetSampleRowsAsync(string connectionString, string table, string pkColumn, int limit = 200, CancellationToken ct = default);
     Task<List<ColumnInfo>> GetTableColumnsAsync(string connectionString, string table, CancellationToken ct = default);
     Task<DataTable> GetTableRowsAsync(string connectionString, string table, int limit, string? whereClause = null, CancellationToken ct = default);
+    Task<DataTable> ExecuteQueryAsync(string connectionString, string sql, CancellationToken ct = default);
 }

@@ -14,6 +14,7 @@ public class SubsetEnginePostgres
     private readonly int _maxRowsPerTable;
     private readonly IProgress<SubsetProgress>? _progress;
     private readonly HashSet<string> _excludedTables;
+    private readonly Dictionary<string, string> _tableFilters;
 
     private Queue<string> _queue = new();
     private HashSet<string> _processedTables = new();
@@ -26,7 +27,8 @@ public class SubsetEnginePostgres
 
     public SubsetEnginePostgres(string connStr, string rootTable, string rootPkVal, string outFile,
         int maxRowsPerTable = 1000, IProgress<SubsetProgress>? progress = null,
-        IReadOnlyCollection<string>? excludedTables = null)
+        IReadOnlyCollection<string>? excludedTables = null,
+        IReadOnlyDictionary<string, string>? tableFilters = null)
     {
         _connStr = connStr;
         _rootTable = rootTable;
@@ -37,6 +39,11 @@ public class SubsetEnginePostgres
         _excludedTables = excludedTables is null
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(excludedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
+        _tableFilters = tableFilters is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(
+                tableFilters.ToDictionary(kv => Canon(kv.Key), kv => kv.Value),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private void Report(string message, string currentTable = "")
@@ -151,6 +158,8 @@ public class SubsetEnginePostgres
         {
             ct.ThrowIfCancellationRequested();
             var where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+            if (_tableFilters.TryGetValue(canon, out var rowFilter) && !string.IsNullOrWhiteSpace(rowFilter))
+                where += $" AND ({rowFilter})";
             var sql = $"SELECT * FROM {qual} WHERE {where} ORDER BY {Esc(pkCol)} DESC LIMIT {_maxRowsPerTable}";
             await using var cmd = new NpgsqlCommand(sql, cn);
             await using var rdr = await cmd.ExecuteReaderAsync(ct);
@@ -189,6 +198,8 @@ public class SubsetEnginePostgres
             {
                 ct.ThrowIfCancellationRequested();
                 var where = $"{Esc(fk.ChildFkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+                if (_tableFilters.TryGetValue(childCan, out var childFilter) && !string.IsNullOrWhiteSpace(childFilter))
+                    where += $" AND ({childFilter})";
                 var sql = $"SELECT {Esc(fk.ChildPkCol)} FROM {qual} WHERE {where} ORDER BY {Esc(fk.ChildPkCol)} DESC LIMIT {_maxRowsPerTable}";
                 await using var cmd = new NpgsqlCommand(sql, cn);
                 await using var rdr = await cmd.ExecuteReaderAsync(ct);
@@ -257,7 +268,9 @@ public class SubsetEnginePostgres
     private async Task DumpFullTable(string table, NpgsqlConnection cn, StreamWriter writer, CancellationToken ct)
     {
         var qual = Esc(table);
-        var sql = $"SELECT * FROM {qual} LIMIT {_maxRowsPerTable}";
+        var tableFilter = _tableFilters.TryGetValue(Canon(table), out var tf) && !string.IsNullOrWhiteSpace(tf)
+            ? $" WHERE ({tf})" : "";
+        var sql = $"SELECT * FROM {qual}{tableFilter} LIMIT {_maxRowsPerTable}";
         await using var cmd = new NpgsqlCommand(sql, cn);
         await using var rdr = await cmd.ExecuteReaderAsync(ct);
         var cols = Enumerable.Range(0, rdr.FieldCount).Select(i => Esc(rdr.GetName(i))).ToArray();

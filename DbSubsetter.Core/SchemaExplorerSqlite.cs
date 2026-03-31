@@ -118,6 +118,17 @@ public class SchemaExplorerSqlite : ISchemaExplorer
         return dt;
     }
 
+    public async Task<DataTable> ExecuteQueryAsync(string connectionString, string sql, CancellationToken ct = default)
+    {
+        await using var cn = new SqliteConnection(connectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqliteCommand(sql, cn) { CommandTimeout = 30 };
+        await using var rdr = await cmd.ExecuteReaderAsync(ct);
+        var dt = new DataTable();
+        await Task.Run(() => dt.Load(rdr), ct);
+        return dt;
+    }
+
     internal static string QuoteId(string id)
     {
         return "\"" + id.Replace("\"", "\"\"") + "\"";

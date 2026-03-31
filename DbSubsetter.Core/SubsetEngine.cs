@@ -15,6 +15,7 @@ public class SubsetEngine
     private readonly int _maxRowsPerTable;
     private readonly IProgress<SubsetProgress>? _progress;
     private readonly HashSet<string> _excludedTables;
+    private readonly Dictionary<string, string> _tableFilters;
     private readonly SchemaScripter _scripter = new();
     private readonly List<string> _fkScripts = new();
 
@@ -31,7 +32,8 @@ public class SubsetEngine
     public SubsetEngine(string connStr, string rootTable, string rootPkVal,
         string? destConnStr = null, string? outFile = null,
         int maxRowsPerTable = 1000, IProgress<SubsetProgress>? progress = null,
-        IReadOnlyCollection<string>? excludedTables = null)
+        IReadOnlyCollection<string>? excludedTables = null,
+        IReadOnlyDictionary<string, string>? tableFilters = null)
     {
         if (destConnStr is null && outFile is null)
             throw new ArgumentException("Either destConnStr or outFile must be provided.");
@@ -45,6 +47,11 @@ public class SubsetEngine
         _excludedTables = excludedTables is null
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(excludedTables.Select(Canon), StringComparer.OrdinalIgnoreCase);
+        _tableFilters = tableFilters is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(
+                tableFilters.ToDictionary(kv => Canon(kv.Key), kv => kv.Value),
+                StringComparer.OrdinalIgnoreCase);
     }
 
     private void Report(string message, string currentTable = "")
@@ -164,6 +171,8 @@ public class SubsetEngine
                 ct.ThrowIfCancellationRequested();
 
                 string where = $"{Esc(fk.ChildFkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+                if (_tableFilters.TryGetValue(childCan, out var childFilter) && !string.IsNullOrWhiteSpace(childFilter))
+                    where += $" AND ({childFilter})";
                 string sql = $"""
                     SELECT TOP ({_maxRowsPerTable}) {Esc(fk.ChildPkCol)}
                     FROM   {fk.ChildTable}
@@ -196,6 +205,8 @@ public class SubsetEngine
         {
             ct.ThrowIfCancellationRequested();
             string where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+            if (_tableFilters.TryGetValue(canon, out var rowFilter) && !string.IsNullOrWhiteSpace(rowFilter))
+                where += $" AND ({rowFilter})";
             string sql = $"SELECT * FROM {table} WHERE {where} ORDER BY {Esc(pkCol)} DESC;";
             await using var cmd = new SqlCommand(sql, cn);
             await using var rdr = await cmd.ExecuteReaderAsync(ct);
@@ -216,7 +227,9 @@ public class SubsetEngine
 
     async Task DumpFullTable(string table, SqlConnection cn, StreamWriter writer, CancellationToken ct)
     {
-        string sql = $"SELECT TOP ({_maxRowsPerTable}) * FROM {table};";
+        string tableFilter = _tableFilters.TryGetValue(Canon(table), out var tf) && !string.IsNullOrWhiteSpace(tf)
+            ? $" WHERE ({tf})" : "";
+        string sql = $"SELECT TOP ({_maxRowsPerTable}) * FROM {table}{tableFilter};";
         await using var cmd = new SqlCommand(sql, cn);
         await using var rdr = await cmd.ExecuteReaderAsync(ct);
         var cols = Enumerable.Range(0, rdr.FieldCount).Select(i => Esc(rdr.GetName(i))).ToArray();
@@ -244,6 +257,8 @@ public class SubsetEngine
             ct.ThrowIfCancellationRequested();
 
             string where = $"{Esc(pkCol)} IN ({string.Join(", ", batch.Select(Lit))})";
+            if (_tableFilters.TryGetValue(canon, out var bulkFilter) && !string.IsNullOrWhiteSpace(bulkFilter))
+                where += $" AND ({bulkFilter})";
             string sql = $"SELECT {colList} FROM {table} WHERE {where} ORDER BY {Esc(pkCol)} DESC;";
 
             await using var cmd = new SqlCommand(sql, srcCn);
@@ -272,7 +287,9 @@ public class SubsetEngine
         var colNames = await _scripter.GetBulkColumnListAsync(srcCn, table, ct);
         var colList = string.Join(", ", colNames.Select(c => Esc(c)));
 
-        string sql = $"SELECT TOP ({_maxRowsPerTable}) {colList} FROM {table};";
+        string fullTableFilter = _tableFilters.TryGetValue(Canon(table), out var ftf) && !string.IsNullOrWhiteSpace(ftf)
+            ? $" WHERE ({ftf})" : "";
+        string sql = $"SELECT TOP ({_maxRowsPerTable}) {colList} FROM {table}{fullTableFilter};";
 
         await using var cmd = new SqlCommand(sql, srcCn);
         await using var rdr = await cmd.ExecuteReaderAsync(ct);

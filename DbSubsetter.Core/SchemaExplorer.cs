@@ -156,4 +156,15 @@ public class SchemaExplorer : ISchemaExplorer
         await Task.Run(() => adapter.Fill(dt), ct);
         return dt;
     }
+
+    public async Task<DataTable> ExecuteQueryAsync(string connectionString, string sql, CancellationToken ct = default)
+    {
+        await using var cn = new SqlConnection(connectionString);
+        await cn.OpenAsync(ct);
+        await using var cmd = new SqlCommand(sql, cn) { CommandTimeout = 30 };
+        var dt = new DataTable();
+        using var adapter = new SqlDataAdapter(cmd);
+        await Task.Run(() => adapter.Fill(dt), ct);
+        return dt;
+    }
 }
